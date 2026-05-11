@@ -2,10 +2,10 @@ import { Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
 const MODULOS_POR_PERFIL = {
-  diretor:     ['dashboard','turmas','alunos','chamada','notas','financeiro','ocorrencias','projetos','relatorios','usuarios','configuracoes'],
+  diretor:     ['dashboard','turmas','alunos','chamada','notas','financeiro','ocorrencias','projetos','relatorios','usuarios','auditoria','configuracoes'],
   coordenador: ['dashboard','turmas','alunos','chamada','notas','ocorrencias','projetos','relatorios'],
   professor:   ['dashboard','turmas','chamada','notas'],
-  admin:       ['dashboard','financeiro','projetos','usuarios','configuracoes','relatorios'],
+  admin:       ['dashboard','financeiro','projetos','usuarios','auditoria','configuracoes','relatorios'],
   secretaria:  ['dashboard','relatorios'],
 }
 

@@ -376,8 +376,16 @@
   - [ ] Mudança de perfil de usuário (motivo obrigatório, notifica Admin)
   - [ ] Leitura de ocorrência médica
   - [ ] Exclusão lógica de qualquer dado (motivo obrigatório, notifica Diretor)
-- [ ] `services/auditoria.js`
-- [ ] Tela de auditoria com filtros (Módulo, Usuário, Período) — acesso Diretor e Admin
+- [x] `services/auditoria.js` (listar, observar realtime, buscar por id)
+- [x] Tela de auditoria completa:
+  - [x] 4 stat cards (Total, Módulos, Críticas, Mais frequente)
+  - [x] Filtros: Módulo, Usuário, Ação, Data início/fim
+  - [x] Busca textual em ação/usuário/motivo
+  - [x] Timeline de registros com ícone + cor por tipo de ação
+  - [x] Modal de detalhe com Antes vs Depois (diff JSON)
+  - [x] Metadados técnicos (ID, IP, timestamp)
+  - [x] Acesso somente Diretor e Admin (página + Firestore Rules)
+  - [x] Limite de 100 registros mais recentes
 
 ---
 

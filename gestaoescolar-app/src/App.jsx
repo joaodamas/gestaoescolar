@@ -13,6 +13,7 @@ import OcorrenciasPage from './pages/Ocorrencias/OcorrenciasPage'
 import ProjetosPage from './pages/Projetos/ProjetosPage'
 import ConfiguracoesPage from './pages/Configuracoes/ConfiguracoesPage'
 import UsuariosPage from './pages/Usuarios/UsuariosPage'
+import AuditoriaPage from './pages/Auditoria/AuditoriaPage'
 import EmDesenvolvimento from './pages/EmDesenvolvimento'
 
 export default function App() {
@@ -56,6 +57,9 @@ export default function App() {
             } />
             <Route path="/usuarios" element={
               <PrivateRoute modulo="usuarios"><UsuariosPage /></PrivateRoute>
+            } />
+            <Route path="/auditoria" element={
+              <PrivateRoute modulo="auditoria"><AuditoriaPage /></PrivateRoute>
             } />
             <Route path="/configuracoes" element={
               <PrivateRoute modulo="configuracoes"><ConfiguracoesPage /></PrivateRoute>
