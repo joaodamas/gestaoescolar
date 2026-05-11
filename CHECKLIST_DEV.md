@@ -130,7 +130,8 @@
 - [x] Tabela: Nome | Matrícula | Turma | Presença % | Status | Ações
 - [ ] Botão "Exportar Lista" (Excel)
 - [x] Modal expansivo "+ Nova Matrícula" com 3 abas: Aluno + Endereço + Responsável
-  - [x] Aba Aluno: Nome, Data Nasc., CPF, Sexo, Necessidades Especiais
+  - [x] Aba Aluno: Nome, Data Nasc., **RA**, CPF, Sexo, Necessidades Especiais
+  - [x] **RA (Registro do Aluno)** — campo identificador estadual, mostrado na tabela e perfil
   - [x] **Aba Endereço com auto-preenchimento por CEP (ViaCEP API)**
     - [x] Campo CEP com busca automática on-blur
     - [x] Logradouro, Número, Complemento, Bairro, Cidade, UF
@@ -246,7 +247,8 @@
 - [x] Gráfico Barras: SAEB histórico por ano (4 anos)
 - [x] Linha de referência da Meta SAEB
 - [x] Destaque do ano atual com cor diferenciada
-- [ ] Histórico real do SAEB no `/configuracoes.saeb_historico` (UI de edição)
+- [x] Histórico real do SAEB editável em Configurações (UI dinâmica adicionar/remover ano)
+- [x] FIX: input SAEB aceita vírgula e ponto, permite apagar para digitar (string interna, conversão no save)
 
 ### Situação Financeira
 - [x] Gauge radial: % de execução orçamentária
@@ -277,6 +279,9 @@
 
 ## FASE 5 — Ocorrências 🟠 ALTA
 
+- [x] FIX: tabela mostrava ID do aluno e UID do registrador em vez dos nomes
+  - [x] Denormalização: `criarOcorrencia` agora salva `aluno_nome` e `registrado_por_nome` no doc
+  - [x] Enriquecimento retroativo: lookup com cache em memória para registros antigos
 - [x] Contadores por tipo no topo (disciplinar | médico | encaminhamento | reunião | acidente)
 - [x] Filtros: Tipo | Período | Status | Gravidade
 - [x] Tabela: Data | Aluno | Tipo | Gravidade | Status | Responsável | Ações

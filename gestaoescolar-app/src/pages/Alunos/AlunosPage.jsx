@@ -48,7 +48,7 @@ export default function AlunosPage() {
 
   function formInicial() {
     return {
-      nome_completo: '', data_nascimento: '', cpf: '', sexo: '',
+      nome_completo: '', data_nascimento: '', cpf: '', ra: '', sexo: '',
       necessidades_especiais: '', turma_id: '', ano_letivo: ANO_LETIVO,
       // Endereço (com auto-preenchimento via CEP)
       cep: '', logradouro: '', numero: '', complemento: '',
@@ -102,7 +102,8 @@ export default function AlunosPage() {
   useEffect(() => { listarTurmas(ANO_LETIVO).then(setTurmas) }, [])
 
   const alunosFiltrados = alunos.filter(a => {
-    const nomeBate = a.nome_completo?.toLowerCase().includes(busca.toLowerCase())
+    const termo = busca.toLowerCase()
+    const nomeBate = a.nome_completo?.toLowerCase().includes(termo) || a.ra?.toLowerCase().includes(termo)
     const turmaBate = !filtroTurma || matriculasMap[a.id]?.turma_id === filtroTurma
     return nomeBate && turmaBate
   })
@@ -145,6 +146,7 @@ export default function AlunosPage() {
         nome_completo: form.nome_completo,
         data_nascimento: form.data_nascimento,
         cpf: form.cpf.replace(/\D/g, ''),
+        ra: form.ra.trim(),
         sexo: form.sexo,
         necessidades_especiais: form.necessidades_especiais,
         foto_url: '',
@@ -276,7 +278,9 @@ export default function AlunosPage() {
                           </div>
                           <div className="min-w-0">
                             <p className="text-sm font-semibold text-slate-900 truncate">{aluno.nome_completo}</p>
-                            <p className="text-xs text-slate-400 font-mono">{mascararCPF(aluno.cpf)}</p>
+                            <p className="text-xs text-slate-400 font-mono">
+                              {aluno.ra ? `RA ${aluno.ra}` : mascararCPF(aluno.cpf)}
+                            </p>
                           </div>
                         </div>
                       </td>
@@ -390,14 +394,24 @@ export default function AlunosPage() {
                 <option value="outro">Outro</option>
               </Select>
             </div>
-            <Input
-              label="CPF"
-              value={form.cpf}
-              maxLength={14}
-              onChange={e => setForm(f => ({ ...f, cpf: formatarCPF(e.target.value) }))}
-              placeholder="000.000.000-00"
-              hint="Opcional · será mascarado em exibições"
-            />
+            <div className="grid grid-cols-2 gap-3">
+              <Input
+                label="RA (Registro do Aluno)"
+                value={form.ra}
+                maxLength={20}
+                onChange={e => setForm(f => ({ ...f, ra: e.target.value.replace(/[^\w-]/g, '').toUpperCase() }))}
+                placeholder="Ex: 123456789-X"
+                hint="Identificador estadual"
+              />
+              <Input
+                label="CPF"
+                value={form.cpf}
+                maxLength={14}
+                onChange={e => setForm(f => ({ ...f, cpf: formatarCPF(e.target.value) }))}
+                placeholder="000.000.000-00"
+                hint="Será mascarado"
+              />
+            </div>
             <Input
               label="Necessidades Especiais"
               value={form.necessidades_especiais}

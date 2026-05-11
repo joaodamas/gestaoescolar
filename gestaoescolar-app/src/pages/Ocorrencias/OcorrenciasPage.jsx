@@ -1,4 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
+import { getDoc, doc } from 'firebase/firestore'
+import { db } from '../../firebase/firebase'
 import { useAuth } from '../../context/AuthContext'
 import {
   listarOcorrencias,
@@ -8,6 +10,40 @@ import {
   contarPorTipo,
   TIPOS_OCORRENCIA,
 } from '../../services/ocorrencias'
+
+// Cache em memória para evitar lookups duplicados
+const _cacheAlunos = new Map()
+const _cacheUsuarios = new Map()
+
+async function nomeAluno(id) {
+  if (!id) return ''
+  if (_cacheAlunos.has(id)) return _cacheAlunos.get(id)
+  try {
+    const s = await getDoc(doc(db, 'alunos', id))
+    const nome = s.exists() ? (s.data().nome_completo ?? '') : ''
+    _cacheAlunos.set(id, nome)
+    return nome
+  } catch { return '' }
+}
+
+async function nomeUsuario(uid) {
+  if (!uid) return ''
+  if (_cacheUsuarios.has(uid)) return _cacheUsuarios.get(uid)
+  try {
+    const s = await getDoc(doc(db, 'usuarios', uid))
+    const nome = s.exists() ? (s.data().nome ?? '') : ''
+    _cacheUsuarios.set(uid, nome)
+    return nome
+  } catch { return '' }
+}
+
+async function enriquecerOcorrencias(lista) {
+  return Promise.all(lista.map(async o => ({
+    ...o,
+    aluno_nome: o.aluno_nome || await nomeAluno(o.aluno_id),
+    registrado_por_nome: o.registrado_por_nome || await nomeUsuario(o.registrado_por),
+  })))
+}
 import {
   AlertTriangle,
   Stethoscope,
@@ -132,7 +168,9 @@ export default function OcorrenciasPage() {
         dataFim: filtroDataFim || undefined,
       }
       const dados = await listarOcorrencias(tipoPerfil, filtros)
-      setOcorrencias(dados)
+      // Enriquece registros antigos que não têm aluno_nome / registrado_por_nome
+      const enriquecidos = await enriquecerOcorrencias(dados)
+      setOcorrencias(enriquecidos)
     } catch (err) {
       console.error('Erro ao listar ocorrências:', err)
     } finally {

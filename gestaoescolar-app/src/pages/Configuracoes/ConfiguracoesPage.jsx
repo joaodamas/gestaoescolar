@@ -46,8 +46,11 @@ export default function ConfiguracoesPage() {
     atualizar('valores', [...(config.valores ?? []), ''])
   }
 
-  function atualizarSaeb(ano, nota) {
-    atualizar('saeb_historico', { ...(config.saeb_historico ?? {}), [ano]: Number(nota) })
+  function atualizarSaeb(ano, valorBruto) {
+    // Aceita vírgula ou ponto como separador decimal
+    // Mantém a string crua no estado para permitir edição livre
+    const limpa = String(valorBruto).replace(',', '.').replace(/[^\d.]/g, '')
+    atualizar('saeb_historico', { ...(config.saeb_historico ?? {}), [ano]: limpa })
   }
 
   function removerSaeb(ano) {
@@ -66,7 +69,17 @@ export default function ConfiguracoesPage() {
     setSalvando(true)
     setErro('')
     try {
-      const limpo = { ...config, valores: (config.valores ?? []).filter(v => v?.trim()) }
+      // Converte saeb_historico para números no momento de salvar
+      const saebNumerico = Object.fromEntries(
+        Object.entries(config.saeb_historico ?? {})
+          .map(([ano, v]) => [ano, Number(v) || 0])
+      )
+      const limpo = {
+        ...config,
+        valores: (config.valores ?? []).filter(v => v?.trim()),
+        saeb_historico: saebNumerico,
+        meta_saeb: Number(config.meta_saeb) || 6.0,
+      }
       await salvarConfiguracoes(limpo, user.uid)
       setSucesso(true)
       setTimeout(() => setSucesso(false), 3000)
@@ -212,7 +225,18 @@ export default function ConfiguracoesPage() {
               <div className="flex-1">
                 <p className="text-xs font-semibold text-purple-900 mb-1">META SAEB</p>
                 <div className="flex items-center gap-2">
-                  <Input type="number" step="0.1" min={0} max={10} value={config.meta_saeb ?? 6.0} onChange={e => atualizar('meta_saeb', Number(e.target.value))} disabled={!podeEditar} className="w-20" />
+                  <Input
+                    type="text"
+                    inputMode="decimal"
+                    value={config.meta_saeb ?? ''}
+                    placeholder="6.0"
+                    onChange={e => {
+                      const limpa = String(e.target.value).replace(',', '.').replace(/[^\d.]/g, '')
+                      atualizar('meta_saeb', limpa)
+                    }}
+                    disabled={!podeEditar}
+                    className="w-20"
+                  />
                   <span className="text-sm font-medium text-slate-600">/ 10</span>
                 </div>
               </div>
@@ -234,11 +258,10 @@ export default function ConfiguracoesPage() {
                   <p className="text-xs font-bold text-slate-500 mb-2">{ano}</p>
                   <div className="flex items-center gap-2">
                     <Input
-                      type="number"
-                      step="0.1"
-                      min={0}
-                      max={10}
-                      value={nota}
+                      type="text"
+                      inputMode="decimal"
+                      value={nota === 0 ? '' : nota ?? ''}
+                      placeholder="0.0"
                       onChange={e => atualizarSaeb(ano, e.target.value)}
                       disabled={!podeEditar}
                       className="flex-1"

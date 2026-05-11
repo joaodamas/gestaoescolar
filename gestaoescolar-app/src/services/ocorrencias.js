@@ -3,6 +3,7 @@ import {
   doc,
   addDoc,
   updateDoc,
+  getDoc,
   getDocs,
   query,
   where,
@@ -89,8 +90,27 @@ export async function listarOcorrencias(perfil, filtros = {}) {
  * @returns {Promise<DocumentReference>}
  */
 export async function criarOcorrencia(dados, usuarioId) {
+  // Denormalização: salva o snapshot do nome do aluno e do registrador
+  // para evitar lookup em toda listagem (boa prática Firestore)
+  let alunoNome = dados.aluno_nome ?? ''
+  if (!alunoNome && dados.aluno_id) {
+    try {
+      const snap = await getDoc(doc(db, 'alunos', dados.aluno_id))
+      if (snap.exists()) alunoNome = snap.data().nome_completo ?? ''
+    } catch {}
+  }
+
+  let registradoPorNome = dados.registrado_por_nome ?? ''
+  if (!registradoPorNome && usuarioId) {
+    try {
+      const snap = await getDoc(doc(db, 'usuarios', usuarioId))
+      if (snap.exists()) registradoPorNome = snap.data().nome ?? ''
+    } catch {}
+  }
+
   return addDoc(collection(db, 'ocorrencias'), {
     aluno_id: dados.aluno_id,
+    aluno_nome: alunoNome,
     tipo: dados.tipo,
     descricao: dados.descricao,
     providencia: dados.providencia ?? '',
@@ -98,6 +118,7 @@ export async function criarOcorrencia(dados, usuarioId) {
     status: 'aberta',
     gravidade: dados.gravidade,
     registrado_por: usuarioId,
+    registrado_por_nome: registradoPorNome,
     notificado_responsavel: dados.notificado_responsavel ?? false,
     created_at: serverTimestamp(),
   })

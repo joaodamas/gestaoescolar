@@ -123,6 +123,7 @@ export default function PerfilAlunoModal({ aluno, aberto, onFechar }) {
                 {aluno.status}
               </Badge>
               {idade !== null && <span className="text-xs text-slate-500">{idade} anos</span>}
+              {aluno.ra && <span className="text-xs text-slate-500 font-mono">RA {aluno.ra}</span>}
               <span className="text-xs text-slate-400 font-mono">{mascararCPF(aluno.cpf)}</span>
             </div>
           </div>
@@ -168,6 +169,7 @@ export default function PerfilAlunoModal({ aluno, aberto, onFechar }) {
                   <Info label="Sexo" valor={aluno.sexo === 'M' ? 'Masculino' : aluno.sexo === 'F' ? 'Feminino' : aluno.sexo || '—'} />
                   <Info label="Data de Nascimento" valor={aluno.data_nascimento ? new Date(aluno.data_nascimento + 'T00:00:00').toLocaleDateString('pt-BR') : '—'} />
                   <Info label="CPF (mascarado)" valor={mascararCPF(aluno.cpf)} mono />
+                  <Info label="RA (Registro do Aluno)" valor={aluno.ra || '—'} mono />
                   {aluno.necessidades_especiais && (
                     <div className="col-span-2 flex items-start gap-2 mt-1 pt-3 border-t border-slate-200">
                       <Heart size={14} className="text-rose-500 mt-0.5 shrink-0" />
