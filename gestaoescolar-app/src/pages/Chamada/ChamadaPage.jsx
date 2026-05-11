@@ -1,0 +1,283 @@
+import { useEffect, useState, useMemo } from 'react'
+import { collection, query, where, getDocs, getDoc, doc } from 'firebase/firestore'
+import { db } from '../../firebase/firebase'
+import { useAuth } from '../../context/AuthContext'
+import { listarTurmas } from '../../services/turmas'
+import { salvarChamada, buscarChamadaDoDia } from '../../services/presencas'
+import { CheckCircle2, XCircle, Clock, Save, AlertTriangle, CalendarDays } from 'lucide-react'
+
+const hoje = () => new Date().toISOString().split('T')[0]
+
+const STATUS_BTN = {
+  presente: { label: 'P', cor: 'bg-green-500 text-white border-green-500', icon: CheckCircle2 },
+  ausente:  { label: 'F', cor: 'bg-red-500 text-white border-red-500',   icon: XCircle },
+  justificado: { label: 'J', cor: 'bg-amber-400 text-white border-amber-400', icon: Clock },
+}
+
+export default function ChamadaPage() {
+  const { user, perfil } = useAuth()
+  const isDiretor = ['diretor', 'coordenador'].includes(perfil?.perfil)
+
+  const [turmas, setTurmas]       = useState([])
+  const [turmaSel, setTurmaSel]   = useState('')
+  const [data, setData]           = useState(hoje())
+  const [alunos, setAlunos]       = useState([])
+  const [chamada, setChamada]     = useState({}) // { alunoId: { status, justificativa } }
+  const [jaExiste, setJaExiste]   = useState(false)
+  const [bloqueada, setBloqueada] = useState(false)
+  const [salvando, setSalvando]   = useState(false)
+  const [sucesso, setSucesso]     = useState(false)
+  const [carregando, setCarregando] = useState(false)
+
+  // Carrega turmas (professor vê só as suas)
+  useEffect(() => {
+    listarTurmas().then(todas => {
+      if (isDiretor) { setTurmas(todas); return }
+      const minhas = todas.filter(t => perfil?.turmas_ids?.includes(t.id))
+      setTurmas(minhas)
+      if (minhas.length === 1) setTurmaSel(minhas[0].id)
+    })
+  }, [])
+
+  // Carrega alunos da turma quando turma ou data muda
+  useEffect(() => {
+    if (!turmaSel) return
+    setCarregando(true)
+    setSucesso(false)
+
+    async function carregar() {
+      // Matríulas ativas da turma
+      const mq = query(
+        collection(db, 'matriculas'),
+        where('turma_id', '==', turmaSel),
+        where('ano_letivo', '==', new Date().getFullYear()),
+        where('status', '==', 'ativa')
+      )
+      const mSnap = await getDocs(mq)
+      const matriculas = mSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+
+      // S-3 QA: usa imports estáticos — sem dynamic import dentro de loop
+      const alunosData = await Promise.all(
+        matriculas.map(async m => {
+          const snap = await getDoc(doc(db, 'alunos', m.aluno_id))
+          return snap.exists()
+            ? { id: snap.id, matriculaId: m.id, ...snap.data() }
+            : null
+        })
+      )
+      const lista = alunosData.filter(Boolean).sort((a, b) => a.nome_completo.localeCompare(b.nome_completo))
+      setAlunos(lista)
+
+      // Verifica se chamada do dia já existe
+      const chamadaExistente = await buscarChamadaDoDia(turmaSel, data)
+      if (chamadaExistente.length > 0) {
+        setJaExiste(true)
+        // Verifica se está bloqueada (48h)
+        const sample = chamadaExistente[0]
+        const editavel = sample.editavel_ate?.toDate?.()
+        setBloqueada(editavel ? editavel < new Date() : false)
+        // Preenche estado com o que já existe
+        const estado = {}
+        chamadaExistente.forEach(p => {
+          estado[p.aluno_id] = { status: p.status, justificativa: p.justificativa ?? '' }
+        })
+        setChamada(estado)
+      } else {
+        setJaExiste(false)
+        setBloqueada(false)
+        // Pré-preenche todos como presentes
+        const estado = {}
+        lista.forEach(a => { estado[a.id] = { status: 'presente', justificativa: '' } })
+        setChamada(estado)
+      }
+
+      setCarregando(false)
+    }
+
+    carregar().catch(console.error)
+  }, [turmaSel, data])
+
+  function marcar(alunoId, status) {
+    if (bloqueada) return
+    setChamada(prev => ({
+      ...prev,
+      [alunoId]: { status, justificativa: status !== 'justificado' ? '' : (prev[alunoId]?.justificativa ?? '') }
+    }))
+  }
+
+  async function salvar() {
+    const invalido = alunos.find(a => {
+      const c = chamada[a.id]
+      return c?.status === 'justificado' && (!c.justificativa || c.justificativa.length < 10)
+    })
+    if (invalido) {
+      alert(`Justificativa obrigatória (mínimo 10 caracteres) para: ${invalido.nome_completo}`)
+      return
+    }
+    setSalvando(true)
+    try {
+      const entradas = alunos.map(a => ({
+        alunoId: a.id,
+        matriculaId: a.matriculaId,
+        turmaId: turmaSel,
+        data,
+        status: chamada[a.id]?.status ?? 'presente',
+        justificativa: chamada[a.id]?.justificativa ?? '',
+      }))
+      await salvarChamada(entradas, user.uid)
+      setJaExiste(true)
+      setSucesso(true)
+    } catch (err) {
+      alert('Erro ao salvar. Tente novamente.')
+      console.error(err)
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  const { presentes, ausentes, justificados } = useMemo(() => {
+    let p = 0, a = 0, j = 0
+    Object.values(chamada).forEach(c => {
+      if (c.status === 'presente') p++
+      else if (c.status === 'ausente') a++
+      else if (c.status === 'justificado') j++
+    })
+    return { presentes: p, ausentes: a, justificados: j }
+  }, [chamada])
+
+  return (
+    <div className="p-6 space-y-5">
+      <div>
+        <h1 className="text-2xl font-bold text-slate-800">Chamada / Presença</h1>
+        <p className="text-slate-500 text-sm mt-0.5">Registro diário de frequência</p>
+      </div>
+
+      {/* Seletores */}
+      <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm flex flex-wrap gap-3 items-end">
+        <div className="flex-1 min-w-44">
+          <label className="block text-xs font-medium text-slate-600 mb-1.5">Turma</label>
+          <select value={turmaSel} onChange={e => setTurmaSel(e.target.value)}
+            className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+            <option value="">Selecione uma turma</option>
+            {turmas.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-600 mb-1.5">Data</label>
+          <input type="date" value={data} onChange={e => setData(e.target.value)}
+            className="px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        {turmaSel && (
+          <div className="flex gap-3 ml-auto">
+            <span className="flex items-center gap-1.5 text-sm font-medium text-green-600 bg-green-50 px-3 py-1.5 rounded-lg">
+              <CheckCircle2 size={14} /> {presentes}
+            </span>
+            <span className="flex items-center gap-1.5 text-sm font-medium text-red-600 bg-red-50 px-3 py-1.5 rounded-lg">
+              <XCircle size={14} /> {ausentes}
+            </span>
+            <span className="flex items-center gap-1.5 text-sm font-medium text-amber-600 bg-amber-50 px-3 py-1.5 rounded-lg">
+              <Clock size={14} /> {justificados}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Avisos */}
+      {jaExiste && !bloqueada && !sucesso && (
+        <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 text-blue-700 text-sm px-4 py-3 rounded-xl">
+          <CalendarDays size={16} /> Chamada já registrada para este dia.
+        </div>
+      )}
+      {sucesso && (
+        <div className="flex items-center gap-2 bg-green-50 border border-green-200 text-green-700 text-sm px-4 py-3 rounded-xl">
+          <CheckCircle2 size={16} /> Chamada salva com sucesso!
+        </div>
+      )}
+      {bloqueada && (
+        <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-700 text-sm px-4 py-3 rounded-xl">
+          <AlertTriangle size={16} /> Chamada bloqueada (prazo de 48h expirado). Solicite edição ao Coordenador.
+        </div>
+      )}
+
+      {/* Lista de alunos */}
+      {turmaSel && (
+        <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+          {carregando ? (
+            <div className="flex justify-center items-center h-48">
+              <div className="w-6 h-6 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : alunos.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-48 text-slate-400">
+              <p className="text-sm">Nenhum aluno matriculado nesta turma</p>
+            </div>
+          ) : (
+            <>
+              <div className="divide-y divide-slate-50">
+                {alunos.map((aluno, idx) => {
+                  const c = chamada[aluno.id] ?? { status: 'presente', justificativa: '' }
+                  return (
+                    <div key={aluno.id} className="px-5 py-3 flex items-center gap-4">
+                      <span className="text-sm text-slate-400 w-6 text-right shrink-0">{idx + 1}</span>
+                      <p className="flex-1 text-sm font-medium text-slate-800">{aluno.nome_completo}</p>
+
+                      {/* Botões P/F/J */}
+                      <div className="flex gap-1.5 shrink-0">
+                        {Object.entries(STATUS_BTN).map(([s, cfg]) => (
+                          <button
+                            key={s}
+                            onClick={() => marcar(aluno.id, s)}
+                            disabled={bloqueada}
+                            className={`w-9 h-9 rounded-lg border-2 text-sm font-bold transition-all ${
+                              c.status === s ? cfg.cor : 'border-slate-200 text-slate-400 hover:border-slate-400'
+                            } ${bloqueada ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                          >
+                            {cfg.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Justificativa */}
+                      {c.status === 'justificado' && (
+                        <input
+                          value={c.justificativa}
+                          onChange={e => setChamada(prev => ({
+                            ...prev,
+                            [aluno.id]: { ...prev[aluno.id], justificativa: e.target.value }
+                          }))}
+                          placeholder="Motivo (mín. 10 caracteres)"
+                          className="text-sm border border-amber-200 rounded-lg px-3 py-1.5 w-60 focus:outline-none focus:ring-2 focus:ring-amber-400 bg-amber-50"
+                        />
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+
+              {!bloqueada && (
+                <div className="px-5 py-4 border-t border-slate-100 flex justify-end">
+                  <button
+                    onClick={salvar}
+                    disabled={salvando}
+                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm font-medium px-6 py-2.5 rounded-lg transition-colors"
+                  >
+                    {salvando
+                      ? <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      : <Save size={15} />}
+                    {salvando ? 'Salvando...' : 'Salvar Chamada'}
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {!turmaSel && (
+        <div className="flex flex-col items-center justify-center h-64 text-slate-300">
+          <CalendarDays size={48} className="mb-3" />
+          <p className="text-sm text-slate-400">Selecione uma turma para registrar a chamada</p>
+        </div>
+      )}
+    </div>
+  )
+}

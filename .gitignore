@@ -1,0 +1,52 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build
+dist/
+dist-ssr/
+build/
+.next/
+
+# Environment - NUNCA commitar
+.env
+.env.local
+.env.production
+.env.development
+*.local
+
+# Firebase
+.firebase/
+firebase-debug.log
+firestore-debug.log
+*.serviceaccount.json
+
+# Backups
+*.bak
+*.bak2
+*.tmp
+firestore.rules.setup
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Cloud Functions
+functions/node_modules/
+
+# Logs
+logs/
+*.log
+
+# Outros
+.cache/
+.parcel-cache/
