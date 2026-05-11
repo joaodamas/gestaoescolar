@@ -6,9 +6,10 @@ import { criarAluno } from '../../services/alunos'
 import { criarMatricula } from '../../services/matriculas'
 import { listarTurmas } from '../../services/turmas'
 import { mascararCPF, formatarCPF, formatarTelefone } from '../../utils/mascaramento'
+import { consultarCEP, formatarCEP } from '../../utils/cep'
 import {
   Search, Plus, ChevronRight, User, Users, AlertCircle, Download,
-  CheckCircle2, ShieldCheck
+  CheckCircle2, ShieldCheck, MapPin, Loader2
 } from 'lucide-react'
 import PageHeader from '../../components/ui/PageHeader'
 import { Card, Badge, EmptyState, Spinner } from '../../components/ui/Card'
@@ -40,11 +41,16 @@ export default function AlunosPage() {
   const [abaAtiva, setAbaAtiva] = useState('aluno')
   const [salvando, setSalvando] = useState(false)
   const [erroForm, setErroForm] = useState('')
+  const [buscandoCEP, setBuscandoCEP] = useState(false)
+  const [cepErro, setCepErro] = useState('')
 
   function formInicial() {
     return {
       nome_completo: '', data_nascimento: '', cpf: '', sexo: '',
       necessidades_especiais: '', turma_id: '', ano_letivo: ANO_LETIVO,
+      // Endereço (com auto-preenchimento via CEP)
+      cep: '', logradouro: '', numero: '', complemento: '',
+      bairro: '', cidade: '', uf: '',
       resp_nome: '', resp_parentesco: 'mae', resp_telefone: '',
       resp_email: '', resp_financeiro: true, resp_pedagogico: true,
       resp_consentimento: false,
@@ -88,6 +94,27 @@ export default function AlunosPage() {
     return turmas.find(t => t.id === mat.turma_id)?.nome ?? '—'
   }
 
+  async function handleCepBlur() {
+    const cepLimpo = form.cep.replace(/\D/g, '')
+    if (cepLimpo.length !== 8) { setCepErro(''); return }
+    setBuscandoCEP(true)
+    setCepErro('')
+    const { sucesso, dados, erro } = await consultarCEP(cepLimpo)
+    setBuscandoCEP(false)
+    if (sucesso) {
+      setForm(f => ({
+        ...f,
+        logradouro: dados.logradouro || f.logradouro,
+        bairro: dados.bairro || f.bairro,
+        cidade: dados.cidade || f.cidade,
+        uf: dados.uf || f.uf,
+        complemento: dados.complemento || f.complemento,
+      }))
+    } else {
+      setCepErro(erro ?? 'Erro ao consultar CEP.')
+    }
+  }
+
   async function salvarNovaMatricula(e) {
     e.preventDefault()
     setErroForm('')
@@ -102,6 +129,15 @@ export default function AlunosPage() {
         sexo: form.sexo,
         necessidades_especiais: form.necessidades_especiais,
         foto_url: '',
+        endereco: {
+          cep: form.cep.replace(/\D/g, ''),
+          logradouro: form.logradouro,
+          numero: form.numero,
+          complemento: form.complemento,
+          bairro: form.bairro,
+          cidade: form.cidade,
+          uf: form.uf,
+        },
       }, user.uid, form.resp_consentimento)
 
       await addDoc(collection(db, 'responsaveis'), {
@@ -238,26 +274,40 @@ export default function AlunosPage() {
         footer={
           <>
             <Button variante="ghost" onClick={() => setDrawerAberto(false)}>Cancelar</Button>
-            {abaAtiva === 'aluno' ? (
-              <Button variante="accent" onClick={() => setAbaAtiva('responsavel')}>
-                Próximo: Responsável
+            {abaAtiva === 'aluno' && (
+              <Button variante="accent" onClick={() => setAbaAtiva('endereco')}>
+                Próximo: Endereço
               </Button>
-            ) : (
-              <Button variante="accent" loading={salvando} onClick={salvarNovaMatricula}>
-                Confirmar Matrícula
-              </Button>
+            )}
+            {abaAtiva === 'endereco' && (
+              <>
+                <Button variante="secondary" onClick={() => setAbaAtiva('aluno')}>← Voltar</Button>
+                <Button variante="accent" onClick={() => setAbaAtiva('responsavel')}>
+                  Próximo: Responsável
+                </Button>
+              </>
+            )}
+            {abaAtiva === 'responsavel' && (
+              <>
+                <Button variante="secondary" onClick={() => setAbaAtiva('endereco')}>← Voltar</Button>
+                <Button variante="accent" loading={salvando} onClick={salvarNovaMatricula}>
+                  Confirmar Matrícula
+                </Button>
+              </>
             )}
           </>
         }
       >
-        {/* Stepper visual */}
+        {/* Stepper visual com 3 etapas */}
         <div className="flex items-center gap-2 mb-6">
           {[
-            { id: 'aluno', label: 'Dados do Aluno', num: 1 },
-            { id: 'responsavel', label: 'Responsável', num: 2 },
-          ].map((step, i) => (
+            { id: 'aluno',       label: 'Dados do Aluno', num: 1 },
+            { id: 'endereco',    label: 'Endereço',       num: 2 },
+            { id: 'responsavel', label: 'Responsável',    num: 3 },
+          ].map((step, i, arr) => (
             <div key={step.id} className="flex items-center flex-1">
               <button
+                type="button"
                 onClick={() => setAbaAtiva(step.id)}
                 className={`flex items-center gap-2 ${abaAtiva === step.id ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}
               >
@@ -268,11 +318,11 @@ export default function AlunosPage() {
                 }`}>
                   {step.num}
                 </div>
-                <span className={`text-xs font-semibold ${abaAtiva === step.id ? 'text-slate-900' : 'text-slate-500'}`}>
+                <span className={`text-xs font-semibold ${abaAtiva === step.id ? 'text-slate-900' : 'text-slate-500'} whitespace-nowrap`}>
                   {step.label}
                 </span>
               </button>
-              {i === 0 && <div className="flex-1 h-px bg-slate-200 mx-3" />}
+              {i < arr.length - 1 && <div className="flex-1 h-px bg-slate-200 mx-3" />}
             </div>
           ))}
         </div>
@@ -336,6 +386,100 @@ export default function AlunosPage() {
                 value={form.ano_letivo}
                 onChange={e => setForm(f => ({ ...f, ano_letivo: Number(e.target.value) }))}
               />
+            </div>
+          </form>
+        )}
+
+        {abaAtiva === 'endereco' && (
+          <form className="space-y-4" onSubmit={e => e.preventDefault()}>
+            {/* CEP com auto-preenchimento */}
+            <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-4">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center shrink-0">
+                  <MapPin size={18} className="text-blue-700" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-xs font-bold text-blue-900 mb-1">Auto-preenchimento por CEP</p>
+                  <p className="text-xs text-blue-700 mb-3">Digite o CEP e os campos serão preenchidos automaticamente via ViaCEP.</p>
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={form.cep}
+                          maxLength={9}
+                          onChange={e => { setForm(f => ({ ...f, cep: formatarCEP(e.target.value) })); setCepErro('') }}
+                          onBlur={handleCepBlur}
+                          placeholder="00000-000"
+                          className="w-full h-10 px-3 text-sm rounded-lg bg-white border border-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all"
+                        />
+                        {buscandoCEP && (
+                          <Loader2 size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-blue-500 animate-spin" />
+                        )}
+                      </div>
+                      {cepErro && <p className="text-xs text-rose-600 mt-1.5">{cepErro}</p>}
+                    </div>
+                    <Button
+                      type="button"
+                      variante="secondary"
+                      tamanho="md"
+                      onClick={handleCepBlur}
+                      loading={buscandoCEP}
+                    >
+                      Buscar
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <Input
+                label="Logradouro"
+                value={form.logradouro}
+                onChange={e => setForm(f => ({ ...f, logradouro: e.target.value }))}
+                placeholder="Rua, Avenida..."
+                className="col-span-2"
+              />
+              <Input
+                label="Número"
+                value={form.numero}
+                onChange={e => setForm(f => ({ ...f, numero: e.target.value }))}
+                placeholder="123"
+              />
+            </div>
+
+            <Input
+              label="Complemento"
+              value={form.complemento}
+              onChange={e => setForm(f => ({ ...f, complemento: e.target.value }))}
+              placeholder="Apto, bloco (opcional)"
+            />
+
+            <div className="grid grid-cols-2 gap-3">
+              <Input
+                label="Bairro"
+                value={form.bairro}
+                onChange={e => setForm(f => ({ ...f, bairro: e.target.value }))}
+              />
+              <Input
+                label="Cidade"
+                value={form.cidade}
+                onChange={e => setForm(f => ({ ...f, cidade: e.target.value }))}
+              />
+            </div>
+
+            <div className="grid grid-cols-4 gap-3">
+              <Select
+                label="UF"
+                value={form.uf}
+                onChange={e => setForm(f => ({ ...f, uf: e.target.value }))}
+              >
+                <option value="">—</option>
+                {['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'].map(uf =>
+                  <option key={uf} value={uf}>{uf}</option>
+                )}
+              </Select>
             </div>
           </form>
         )}

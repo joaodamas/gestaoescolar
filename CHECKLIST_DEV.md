@@ -72,6 +72,17 @@
 - [ ] Modelagem `/disciplinas`
 - [ ] Modelagem `/calendario`
 
+### Endereço com Auto-preenchimento por CEP 🔴 NOVO — CRÍTICO
+- [x] Utilitário `utils/cep.js` com integração ViaCEP API
+- [x] Cache em memória para evitar consultas repetidas
+- [x] Validação de CEP (8 dígitos)
+- [x] Formatação visual (00000-000)
+- [x] Aba Endereço no modal de matrícula
+- [x] Spinner de loading durante busca
+- [x] Tratamento de erro (CEP inválido, não encontrado, timeout)
+- [x] Campos auto-preenchidos: Logradouro, Bairro, Cidade, UF, Complemento
+- [x] Salvo em `aluno.endereco` (objeto aninhado)
+
 ### Tela Gestão de Turmas (CRUD) 🔴 NOVO — CRÍTICO
 - [x] Listagem de turmas em grid (cards) com indicadores visuais
 - [x] Filtros por turno (manhã/tarde/integral) e busca
@@ -92,8 +103,12 @@
 - [x] Filtros: Turma / Status / Ano letivo
 - [x] Tabela: Nome | Matrícula | Turma | Presença % | Status | Ações
 - [ ] Botão "Exportar Lista" (Excel)
-- [x] Drawer "+ Nova Matrícula" com abas: Aluno + Responsável
-  - [x] Aba Aluno: Nome, Data Nasc., CPF, Sexo, Foto (upload Storage)
+- [x] Modal expansivo "+ Nova Matrícula" com 3 abas: Aluno + Endereço + Responsável
+  - [x] Aba Aluno: Nome, Data Nasc., CPF, Sexo, Necessidades Especiais
+  - [x] **Aba Endereço com auto-preenchimento por CEP (ViaCEP API)**
+    - [x] Campo CEP com busca automática on-blur
+    - [x] Logradouro, Número, Complemento, Bairro, Cidade, UF
+    - [x] Endereço gravado em `aluno.endereco` (objeto aninhado)
   - [x] Aba Responsável: Nome, Parentesco, Telefone, Email, Consentimento LGPD
   - [x] Seleção de Turma e Ano Letivo
   - [x] Criar atomicamente: `/alunos` + `/responsaveis` + `/matriculas`
@@ -455,7 +470,12 @@
 - [x] Firebase Hosting: https://gestaoescolar-jpproject.web.app
 - [x] Firestore Rules deployadas
 - [x] Storage Rules deployadas
-- [ ] Cloud Functions (exige plano Blaze)
+- [x] Cloud Functions (Blaze ativo) — 6 functions deployadas:
+  - [x] `recalcularIndicadoresCallable` + `recalcularIndicadoresScheduled` (15 min)
+  - [x] `alertarPrazos` (diário 08:00)
+  - [x] `onPresencaSalva` (trigger Firestore — alerta 25% faltas)
+  - [x] `onDespesaAprovada` (trigger Firestore — recalcula + auditoria)
+  - [x] `onNotaAlteradaAposFechamento` (trigger Firestore — auditoria)
 
 ### Próximas prioridades imediatas:
 1. **🟠 Tela de Configurações** — sem ela o Dashboard não consegue meta_saeb, missão, valores
