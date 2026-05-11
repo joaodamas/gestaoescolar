@@ -276,18 +276,21 @@
 ## FASE 7 — Projetos & Pendências 🟡 MÉDIA
 
 ### Projetos (Kanban)
-- [ ] Kanban 3 colunas: Planejado | Em Andamento | Concluído
-- [ ] Card: Nome | Responsável | Data fim | Indicador de sucesso
-- [ ] Botão "+ Novo Projeto" (modal)
-- [ ] Botão "Avançar" no card (move status + grava auditoria)
-- [ ] Botão "Ver Detalhes"
+- [x] Kanban 3 colunas: Planejado | Em Andamento | Concluído
+- [x] Card: Nome | Descrição | Categoria | Data fim | Indicador de sucesso
+- [x] Botão "+ Novo Projeto" (modal expansivo)
+- [x] Botão "Avançar →" no card (move para próxima coluna)
+- [ ] Drag & drop entre colunas
+- [ ] Modal de detalhes do projeto
 
 ### Pendências
-- [ ] Lista ordenada por `data_prazo`
-- [ ] Alerta visual: pendências vencendo em ≤ 7 dias (badge vermelho)
-- [ ] Botão "+ Nova Pendência" (modal)
-- [ ] Botão "Atualizar Status" (dropdown inline)
-- [ ] Cloud Function: verifica prazos diariamente e cria `/notificacoes`
+- [x] Lista ordenada por `data_prazo`
+- [x] Alerta visual: pendências vencendo em ≤ 7 dias (cor amber/vermelha)
+- [x] Indicador "Venceu há Nd" / "Vence hoje" / "Em Nd"
+- [x] Botão "+ Nova Pendência" (modal)
+- [x] Atualização de status inline (dropdown)
+- [x] Tipos pré-definidos: PDDE, Conselho PDE, Plano de Ação, Formação, Avaliação Institucional
+- [x] Cloud Function `alertarPrazos` (deploy pendente — exige Blaze)
 
 ---
 
@@ -350,13 +353,16 @@
 
 ## FASE 11 — Configurações da Escola 🟢 BAIXA
 
-- [ ] Tela de Configurações (Diretor e Admin)
-- [ ] Dados da escola: Nome, CNPJ, Endereço, Logo
-- [ ] Ano letivo atual
-- [ ] Metas: Presença % | Aprovação % | SAEB
-- [ ] Regras de nota: pesos por tipo de avaliação
+- [x] Tela de Configurações (Diretor e Admin)
+- [x] Dados da escola: Nome, CNPJ, Slogan, Ano Letivo
+- [x] Missão e Valores editáveis (afeta o Dashboard)
+- [x] Metas: Presença % | Aprovação % | SAEB
+- [x] Regras de nota: pesos por tipo de avaliação
+- [x] Limite de valor para comprovante obrigatório (padrão R$500)
+- [x] Histórico SAEB dinâmico (alimenta o gráfico do Dashboard)
+- [ ] Upload de Logo (Firebase Storage)
+- [ ] Endereço completo (CEP, rua, número, cidade, estado)
 - [ ] Regras de recuperação final
-- [ ] Limite de valor para comprovante obrigatório (padrão R$500)
 - [ ] Alerta PDDE: dias de antecedência (padrão 15)
 
 ---
@@ -385,21 +391,26 @@
 - [ ] Cloud Function monitora despesas pendentes de aprovação
 
 ### Gestão de Usuários (Diretor/Admin) 🟠 ALTA
-- [ ] Tela de listagem de usuários por perfil
-- [ ] Criação de usuário (Firebase Auth + `/usuarios`)
-- [ ] Ativar/Desativar usuário
-- [ ] Alterar perfil (com auditoria obrigatória)
-- [ ] Atribuição de turmas para professores (sincroniza `usuarios.turmas_ids` e `turmas.professores_ids`)
+- [x] Tela de listagem de usuários por perfil com cards de contagem
+- [x] Filtros: busca por nome/email, status (ativo/inativo)
+- [x] Criação de documento `/usuarios` (UID precisa vir do Auth Console)
+- [x] Edição de nome e perfil
+- [x] Ativar/Desativar usuário (toggle)
+- [x] Atribuição de turmas para professores (multi-seleção visual)
+- [ ] Criar usuário direto via Cloud Function (sem precisar do Auth Console)
+- [ ] Alteração de perfil com auditoria obrigatória
 - [ ] Reset de senha por administrador
 
 ### Configurações da Escola — campos para alimentar o Dashboard 🟠 ALTA NOVO
-- [ ] Tela com formulário de edição em `/configuracoes/escola`
-- [ ] Campo: nome_escola, cnpj, logo_url
-- [ ] Campo: missao, valores (array), slogan
-- [ ] Campo: meta_presenca, meta_aprovacao, meta_saeb
-- [ ] Campo: orcamento_previsto, limite_comprovante
-- [ ] Campo: saeb_historico (map ano→nota — input dinâmico)
-- [ ] Campo: regras_nota (pesos por tipo de avaliação)
+- [x] Tela com formulário de edição em `/configuracoes/escola`
+- [x] Campo: nome_escola, cnpj, slogan, ano_letivo_atual
+- [x] Campo: missao, valores (array dinâmico)
+- [x] Campo: meta_presenca, meta_aprovacao, meta_saeb
+- [x] Campo: orcamento_previsto, limite_comprovante
+- [x] Campo: saeb_historico (map ano→nota — input dinâmico)
+- [x] Campo: regras_nota (pesos por tipo de avaliação)
+- [ ] Upload de logo_url (Firebase Storage)
+- [ ] Endereço completo (CEP, rua, cidade, estado)
 
 ---
 
@@ -432,10 +443,19 @@
 🟠 FASE 10 → LGPD                             🔄 EM PROGRESSO (consentimento + mascaramento C-1 OK)
 🟠 FASE 5 → Ocorrências                       ✅ Tela + service prontos
 🟡 FASE 6 → Financeiro                        ✅ Tela + service + Cloud Function prontos
-🟡 FASE 7 → Projetos & Pendências             🔄 Services prontos, falta UI Kanban
+🟡 FASE 7 → Projetos & Pendências             ✅ Kanban + lista de pendências prontos
 🟡 FASE 8 → Relatórios                        ⏳ Pendente
-🟢 FASE 11 → Configurações                    ⏳ Pendente (Backend OK, falta UI)
+🟢 FASE 11 → Configurações                    ✅ Tela completa de Configurações entregue
+🟠 EXTRA → Gestão de Usuários                ✅ CRUD + vinculação de turmas
+🟠 EXTRA → Modal expansivo (não drawer)      ✅ Padrão revisado
 ```
+
+### 🚀 Deploy
+- [x] GitHub repo: https://github.com/joaodamas/gestaoescolar
+- [x] Firebase Hosting: https://gestaoescolar-jpproject.web.app
+- [x] Firestore Rules deployadas
+- [x] Storage Rules deployadas
+- [ ] Cloud Functions (exige plano Blaze)
 
 ### Próximas prioridades imediatas:
 1. **🟠 Tela de Configurações** — sem ela o Dashboard não consegue meta_saeb, missão, valores

@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Users, ClipboardList, BookOpen,
   Wallet, AlertTriangle, FolderKanban, BarChart3,
   Settings, LogOut, GraduationCap, Bell, ChevronDown,
-  School
+  School, Shield
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { useState } from 'react'
@@ -25,15 +25,16 @@ const MENU = [
     { path: '/relatorios',    label: 'Relatórios',     icon: BarChart3,       modulo: 'relatorios' },
   ]},
   { secao: 'Sistema', items: [
+    { path: '/usuarios',      label: 'Usuários',       icon: Shield,          modulo: 'usuarios' },
     { path: '/configuracoes', label: 'Configurações',  icon: Settings,        modulo: 'configuracoes' },
   ]},
 ]
 
 const MODULOS_POR_PERFIL = {
-  diretor:     ['dashboard','turmas','alunos','chamada','notas','financeiro','ocorrencias','projetos','relatorios','configuracoes'],
+  diretor:     ['dashboard','turmas','alunos','chamada','notas','financeiro','ocorrencias','projetos','relatorios','usuarios','configuracoes'],
   coordenador: ['dashboard','turmas','alunos','chamada','notas','ocorrencias','projetos','relatorios'],
   professor:   ['dashboard','turmas','chamada','notas'],
-  admin:       ['dashboard','financeiro','projetos','configuracoes','relatorios'],
+  admin:       ['dashboard','financeiro','projetos','usuarios','configuracoes','relatorios'],
   secretaria:  ['dashboard','relatorios'],
 }
 

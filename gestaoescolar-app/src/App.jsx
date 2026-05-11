@@ -10,6 +10,9 @@ import ChamadaPage from './pages/Chamada/ChamadaPage'
 import NotasPage from './pages/Notas/NotasPage'
 import FinanceiroPage from './pages/Financeiro/FinanceiroPage'
 import OcorrenciasPage from './pages/Ocorrencias/OcorrenciasPage'
+import ProjetosPage from './pages/Projetos/ProjetosPage'
+import ConfiguracoesPage from './pages/Configuracoes/ConfiguracoesPage'
+import UsuariosPage from './pages/Usuarios/UsuariosPage'
 import EmDesenvolvimento from './pages/EmDesenvolvimento'
 
 export default function App() {
@@ -46,13 +49,16 @@ export default function App() {
               <PrivateRoute modulo="ocorrencias"><OcorrenciasPage /></PrivateRoute>
             } />
             <Route path="/projetos" element={
-              <PrivateRoute modulo="projetos"><EmDesenvolvimento titulo="Projetos & Pendências" /></PrivateRoute>
+              <PrivateRoute modulo="projetos"><ProjetosPage /></PrivateRoute>
             } />
             <Route path="/relatorios" element={
               <PrivateRoute modulo="relatorios"><EmDesenvolvimento titulo="Relatórios & Exportação" /></PrivateRoute>
             } />
+            <Route path="/usuarios" element={
+              <PrivateRoute modulo="usuarios"><UsuariosPage /></PrivateRoute>
+            } />
             <Route path="/configuracoes" element={
-              <PrivateRoute modulo="configuracoes"><EmDesenvolvimento titulo="Configurações da Escola" /></PrivateRoute>
+              <PrivateRoute modulo="configuracoes"><ConfiguracoesPage /></PrivateRoute>
             } />
           </Route>
 
