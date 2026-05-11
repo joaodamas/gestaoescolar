@@ -38,6 +38,32 @@
 - [x] Proteção de rotas por perfil (PrivateRoute)
 - [x] Validação de acesso por módulo conforme tabela de perfis
 
+### Firestore Indexes (Composite) 🔴 NOVO — CRÍTICO
+- [x] Criar `firestore.indexes.json` com 22 índices compostos
+- [x] alunos: `status + nome_completo`
+- [x] turmas: `ano_letivo + nome` e `ano_letivo + ativa + nome`
+- [x] matriculas: `aluno_id + ano_letivo (DESC)`, `aluno_id + ano_letivo + status`, `turma_id + ano_letivo + status`
+- [x] presencas: `aluno_id + status`, `turma_id + data (DESC)`
+- [x] notas: `aluno_id + ano_letivo (DESC)`, `turma_id + disciplina_id + bimestre + ano_letivo`, `ano_letivo + fechado`
+- [x] avaliacoes: `turma_id + disciplina_id + bimestre + ano_letivo + data_aplicacao`
+- [x] disciplinas: `turma_id + ano_letivo + nome`
+- [x] ocorrencias: `aluno_id + data_ocorrencia (DESC)`, `tipo + data_ocorrencia (DESC)`
+- [x] notificacoes: `destinatario_id + data_envio (DESC)`, `destinatario_id + lida`
+- [x] projetos: `status + data_inicio (DESC)`
+- [x] pendencias: `status + data_prazo`, `data_prazo + notificacao_enviada + status`
+- [x] financeiro_lancamentos: `ano + status`
+- [x] calendario: `ano_letivo + tipo`
+- [x] usuarios: `perfil + ativo`
+- [x] Deploy via `firebase deploy --only firestore:indexes`
+
+### Tratamento de Erro em onSnapshot 🔴 NOVO — CRÍTICO
+- [x] Adicionar error callback em todos os `onSnapshot` (sem isso, erros silenciam → loading infinito)
+- [x] `AlunosPage`: erro callback + banner vermelho com mensagem
+- [x] `TurmasPage`: erro callback via `observarTurmas(_, callback, errorCallback)`
+- [x] `services/turmas.js`: `observarTurmas` aceita errorCallback e chama success([]) para destravar UI
+- [x] `services/notificacoes.js`: error handler que retorna []
+- [ ] Aplicar mesmo padrão em todas as páginas restantes (Notas, Financeiro, Ocorrências, Projetos, Usuários)
+
 ### Firestore Security Rules
 - [x] Regras para `/usuarios` — próprio + Diretor lê, Admin/Diretor escreve
 - [x] Regras para `/alunos` — Diretor e Coordenador
@@ -461,25 +487,28 @@
 ## Resumo de Prioridades para MVP
 
 ```
-🔴 FASE 1 → Base, Auth, Security Rules         ✅ CONCLUÍDA
-🔴 FASE 2 → Gestão de Alunos + Turmas         ✅ CRUDs prontos (faltam perfil aluno + exportar)
-🟠 FASE 3 → Pedagógico (Chamada + Notas)       ✅ Telas prontas (faltam validações de calendário)
-🟠 FASE 4 → Dashboard nível referência         ✅ Todas as 8 seções implementadas
-🟠 FASE 9 → Auditoria                         🔄 Triggers parciais (Cloud Functions OK)
-🟠 FASE 10 → LGPD                             🔄 EM PROGRESSO (consentimento + mascaramento C-1 OK)
-🟠 FASE 5 → Ocorrências                       ✅ Tela + service prontos
-🟡 FASE 6 → Financeiro                        ✅ Tela + service + Cloud Function prontos
-🟡 FASE 7 → Projetos & Pendências             ✅ Kanban + lista de pendências prontos
-🟡 FASE 8 → Relatórios                        ⏳ Pendente
-🟢 FASE 11 → Configurações                    ✅ Tela completa de Configurações entregue
-🟠 EXTRA → Gestão de Usuários                ✅ CRUD + vinculação de turmas
-🟠 EXTRA → Modal expansivo (não drawer)      ✅ Padrão revisado
+🔴 FASE 1 → Base, Auth, Security Rules         ✅ CONCLUÍDA + Indexes deployados
+🔴 FASE 2 → Gestão de Alunos + Turmas         ✅ CRUDs + Perfil 5-abas + CEP + soft delete
+🟠 FASE 3 → Pedagógico (Chamada + Notas)       ✅ Telas + integração com /calendario
+🟠 FASE 4 → Dashboard nível referência         ✅ Todas as 8 seções + dados reais
+🟠 FASE 5 → Ocorrências                       ✅ Tela + service + filtro por perfil
+🟡 FASE 6 → Financeiro                        ✅ Tela + service + Cloud Function de aprovação
+🟡 FASE 7 → Projetos & Pendências             ✅ Kanban + lista de pendências
+🟠 FASE 9 → Auditoria                         🔄 4/10 triggers ativos (UI faltando)
+🟠 FASE 10 → LGPD                             🔄 Consentimento + mascaramento (Storage URLs faltando)
+🟡 FASE 8 → Relatórios                        ⏳ Pendente (utils PDF/Excel + 12 relatórios)
+🟢 FASE 11 → Configurações                    ✅ Tela completa + edição em tempo real
+🟠 EXTRA → Gestão de Usuários                ✅ CRUD + multi-vínculo de turmas
+🟠 EXTRA → Sino de Notificações              ✅ Realtime + marcar lida/todas
+🟠 EXTRA → Modal expansivo (não drawer)      ✅ Padrão revisado em todo o app
+🔴 FIX → Indexes + Error handlers             ✅ Corrigido infinito loading
 ```
 
 ### 🚀 Deploy
 - [x] GitHub repo: https://github.com/joaodamas/gestaoescolar
 - [x] Firebase Hosting: https://gestaoescolar-jpproject.web.app
 - [x] Firestore Rules deployadas
+- [x] Firestore Indexes deployados (22 índices compostos)
 - [x] Storage Rules deployadas
 - [x] Cloud Functions (Blaze ativo) — 6 functions deployadas:
   - [x] `recalcularIndicadoresCallable` + `recalcularIndicadoresScheduled` (15 min)
@@ -489,11 +518,15 @@
   - [x] `onNotaAlteradaAposFechamento` (trigger Firestore — auditoria)
 
 ### Próximas prioridades imediatas:
-1. **🟠 Tela de Configurações** — sem ela o Dashboard não consegue meta_saeb, missão, valores
-2. **🟠 Gestão de Usuários** — sem ela não cria professor para vincular a turma
-3. **🟠 Tela de Projetos (Kanban) + Pendências** — usados no Dashboard
-4. **🟠 Perfil do Aluno** (drawer detalhe) — completar fluxo de matrícula
-5. **🟡 Tela de Relatórios** — boletins, frequência, ocorrências, financeiro
+1. **🟠 Tela de Auditoria** — `/auditoria` populada por CF, falta UI com filtros
+2. **🟠 utils/exportPDF + utils/exportExcel** — base para todos os relatórios
+3. **🟠 CRUD de Disciplinas** — bloqueia notas por disciplina
+4. **🟠 Tela de Calendário** (UI) — cadastrar feriados/recessos visualmente
+5. **🟠 Aplicar error handlers em todas as páginas restantes**
+6. **🟡 Boletim por aluno + Diário de classe** (PDF) — relatórios mais críticos
+7. **🟡 Drag & drop no Kanban de Projetos**
+8. **🟢 Toast notifications + Avatar component**
+9. **🟢 Upload de Logo da escola (Storage)**
 
 > **Atenção:** Auditoria e LGPD foram movidos para antes de Ocorrências e Financeiro porque o sistema armazena dados de menores de idade — a conformidade é obrigatória desde o início, não pode ser deixada para o final.
 
