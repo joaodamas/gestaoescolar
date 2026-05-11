@@ -41,6 +41,7 @@ export default function UsuariosPage() {
   const [editando, setEditando] = useState(null)
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
+  const [erroQuery, setErroQuery] = useState('')
   const [sucesso, setSucesso] = useState('')
   const [form, setForm] = useState(formInicial())
 
@@ -49,10 +50,16 @@ export default function UsuariosPage() {
   }
 
   useEffect(() => {
-    const unsub = observarUsuarios(lista => {
-      setUsuarios(lista)
-      setCarregando(false)
-    })
+    const unsub = observarUsuarios(
+      lista => {
+        setUsuarios(lista)
+        setCarregando(false)
+      },
+      err => {
+        setErroQuery(err.message ?? 'Erro ao carregar usuários. Verifique permissões/índices.')
+        setCarregando(false)
+      }
+    )
     return unsub
   }, [])
 
@@ -167,6 +174,13 @@ export default function UsuariosPage() {
           )
         }
       />
+
+      {erroQuery && (
+        <div className="mb-4 bg-rose-50 border border-rose-200 text-rose-800 text-sm px-4 py-3 rounded-xl flex items-start gap-2">
+          <AlertCircle size={16} className="mt-0.5 shrink-0" />
+          <span>{erroQuery}</span>
+        </div>
+      )}
 
       {/* Cards por perfil */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-5">

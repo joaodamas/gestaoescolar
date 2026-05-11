@@ -82,7 +82,14 @@ service cloud.firestore {
 
     // ── /disciplinas ─────────────────────────────────────────────────────
     match /disciplinas/{discId} {
-      allow read: if isAtivo();
+      allow read: if isAtivo() && (
+        isAnyOf(['diretor', 'coordenador', 'admin'])
+        || (isPerfil('professor') && (
+          hasMinhasTurmas(resource.data.turma_id)
+          || resource.data.professor_id == request.auth.uid
+          || request.auth.uid in resource.data.get('professores_ids', [])
+        ))
+      );
       allow create: if isAtivo() && isAnyOf(['diretor', 'coordenador']);
       allow update: if isAtivo() && isAnyOf(['diretor', 'coordenador']);
       allow delete: if false;
@@ -91,7 +98,9 @@ service cloud.firestore {
     // ── /calendario ──────────────────────────────────────────────────────
     match /calendario/{calId} {
       allow read: if isAtivo();
-      allow write: if isAtivo() && isAnyOf(['diretor', 'admin']);
+      allow create: if isAtivo() && isAnyOf(['diretor', 'admin']);
+      allow update: if isAtivo() && isAnyOf(['diretor', 'admin']);
+      allow delete: if false;
     }
 
     // ── /presencas ───────────────────────────────────────────────────────

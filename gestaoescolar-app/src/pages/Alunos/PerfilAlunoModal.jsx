@@ -3,7 +3,11 @@ import { collection, query, where, orderBy, getDocs, doc, getDoc, limit } from '
 import { db } from '../../firebase/firebase'
 import { listarResponsaveis } from '../../services/responsaveis'
 import { listarMatriculasDoAluno } from '../../services/matriculas'
+import { listarCalendario } from '../../services/calendario'
 import { mascararCPF, mascararTelefone } from '../../utils/mascaramento'
+import { baixarPDF, slugify, Document } from '../../utils/exportPDF'
+import { resumirFrequencia } from '../../utils/frequencia'
+import { AlunoLGPDDocumento } from './documentos/AlunoLGPDDocumento'
 import {
   User, Heart, BookOpen, Calendar, Users as UsersIcon,
   GraduationCap, AlertTriangle, MapPin, Mail, Phone,
@@ -29,11 +33,20 @@ export default function PerfilAlunoModal({ aluno, aberto, onFechar }) {
   const [aba, setAba] = useState('dados')
   const [responsaveis, setResponsaveis] = useState([])
   const [historico, setHistorico] = useState([])
-  const [presencas, setPresencas] = useState({ presentes: 0, ausentes: 0, justificados: 0, total: 0 })
+  const [presencas, setPresencas] = useState({
+    presentes: 0,
+    ausentes: 0,
+    justificados: 0,
+    total: 0,
+    frequencia_real: 0,
+    frequencia_limite: 0,
+    percentual_faltas_limite: 0,
+  })
   const [notas, setNotas] = useState([])
   const [ocorrencias, setOcorrencias] = useState([])
   const [turmasMap, setTurmasMap] = useState({})
   const [carregando, setCarregando] = useState(false)
+  const [gerandoPdf, setGerandoPdf] = useState(false)
 
   useEffect(() => {
     if (!aberto || !aluno) return
@@ -59,16 +72,12 @@ export default function PerfilAlunoModal({ aluno, aberto, onFechar }) {
         }))
         setTurmasMap(tm)
 
-        // Presenças (resumo)
+        // Presenças (resumo) - exclui feriados/recessos e separa frequência real da regra legal
         const presSnap = await getDocs(query(collection(db, 'presencas'), where('aluno_id', '==', aluno.id)))
-        let p = 0, a = 0, j = 0
-        presSnap.docs.forEach(d => {
-          const s = d.data().status
-          if (s === 'presente') p++
-          else if (s === 'ausente') a++
-          else if (s === 'justificado') j++
-        })
-        setPresencas({ presentes: p, ausentes: a, justificados: j, total: presSnap.size })
+        const registrosPresenca = presSnap.docs.map(d => d.data())
+        const anosPresenca = [...new Set(registrosPresenca.map(p => Number(p.ano_letivo) || Number(p.data?.slice(0, 4))).filter(Boolean))]
+        const eventosCalendario = (await Promise.all(anosPresenca.map(ano => listarCalendario(ano)))).flat()
+        setPresencas(resumirFrequencia(registrosPresenca, eventosCalendario))
 
         // Últimas notas
         const notasSnap = await getDocs(query(
@@ -102,20 +111,51 @@ export default function PerfilAlunoModal({ aluno, aberto, onFechar }) {
     ? Math.floor((Date.now() - new Date(aluno.data_nascimento).getTime()) / (365.25 * 24 * 60 * 60 * 1000))
     : null
 
-  const presencaPct = presencas.total > 0
-    ? Math.round((presencas.presentes / presencas.total) * 100)
-    : 0
+  const presencaPct = Math.round(presencas.frequencia_real ?? 0)
+  const presencaLimitePct = Math.round(presencas.frequencia_limite ?? 0)
+  const faltasLimitePct = presencas.percentual_faltas_limite ?? 0
 
   const iniciais = aluno.nome_completo?.split(' ').slice(0, 2).map(n => n[0]).join('').toUpperCase() ?? '?'
+
+  async function exportarPDF() {
+    setGerandoPdf(true)
+    try {
+      const documento = (
+        <Document>
+          <AlunoLGPDDocumento
+            dados={{
+              aluno,
+              responsaveis,
+              historico,
+              presencas,
+              notas,
+              ocorrencias,
+              turmasMap,
+              dataGeracao: new Date().toLocaleString('pt-BR'),
+            }}
+          />
+        </Document>
+      )
+      await baixarPDF(documento, `dados-aluno-${slugify(aluno.nome_completo || aluno.id)}.pdf`)
+    } catch (err) {
+      console.error('Erro ao exportar dados do aluno:', err)
+    } finally {
+      setGerandoPdf(false)
+    }
+  }
 
   return (
     <Modal aberto={aberto} onFechar={onFechar} titulo={null} tamanho="xl">
       {/* Hero do aluno */}
       <div className="-mx-6 -mt-5 mb-4 px-6 pb-5 pt-2 border-b border-slate-100">
         <div className="flex items-center gap-4">
-          <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center text-xl font-bold text-white shadow-lg shrink-0">
-            {iniciais}
-          </div>
+          {aluno.foto_url ? (
+            <img src={aluno.foto_url} alt="" className="w-16 h-16 rounded-2xl object-cover shadow-lg shrink-0" />
+          ) : (
+            <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center text-xl font-bold text-white shadow-lg shrink-0">
+              {iniciais}
+            </div>
+          )}
           <div className="min-w-0 flex-1">
             <h2 className="text-xl font-bold text-slate-900 truncate">{aluno.nome_completo}</h2>
             <div className="flex flex-wrap items-center gap-2 mt-1">
@@ -181,6 +221,38 @@ export default function PerfilAlunoModal({ aluno, aberto, onFechar }) {
                   )}
                 </div>
               </div>
+
+              {/* Saúde e acessibilidade */}
+              {aluno.saude && (
+                <div>
+                  <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                    <Heart size={12} /> Saúde e Acessibilidade
+                  </h3>
+                  <div className="bg-rose-50/60 border border-rose-100 rounded-xl p-4 grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3">
+                    <Info label="Tem deficiência" valor={aluno.saude.tem_deficiencia ? 'Sim' : 'Não'} />
+                    <Info label="Tem doença/condição" valor={aluno.saude.tem_doenca ? 'Sim' : 'Não'} />
+                    <Info label="Tem alergia" valor={aluno.saude.tem_alergia ? 'Sim' : 'Não'} />
+                    <Info label="Plano de saúde" valor={aluno.saude.plano_saude || '—'} />
+                    {aluno.saude.deficiencia_descricao && <Info label="Acessibilidade" valor={aluno.saude.deficiencia_descricao} />}
+                    {aluno.saude.doencas && <Info label="Doenças/Condições" valor={aluno.saude.doencas} />}
+                    {aluno.saude.alergias && <Info label="Alergias" valor={aluno.saude.alergias} />}
+                    {aluno.saude.alergias_alimentares && <Info label="Alergias Alimentares" valor={aluno.saude.alergias_alimentares} />}
+                    {aluno.saude.restricoes_alimentares && <Info label="Restrições Alimentares" valor={aluno.saude.restricoes_alimentares} />}
+                    {aluno.saude.medicamentos_continuos && <Info label="Medicamentos Contínuos" valor={aluno.saude.medicamentos_continuos} />}
+                    {(aluno.saude.contato_emergencia_nome || aluno.saude.contato_emergencia_telefone) && (
+                      <Info
+                        label="Contato de Emergência"
+                        valor={`${aluno.saude.contato_emergencia_nome || '—'} · ${mascararTelefone(aluno.saude.contato_emergencia_telefone)}`}
+                      />
+                    )}
+                    {aluno.saude.observacoes_saude && (
+                      <div className="md:col-span-2">
+                        <Info label="Observações" valor={aluno.saude.observacoes_saude} />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Endereço */}
               {aluno.endereco?.cep && (
@@ -292,12 +364,19 @@ export default function PerfilAlunoModal({ aluno, aberto, onFechar }) {
                 </div>
               </div>
 
-              {presencas.ausentes / Math.max(presencas.total, 1) >= 0.25 && (
+              <div className="bg-slate-50 border border-slate-200 text-slate-700 text-sm px-4 py-3 rounded-xl">
+                <p className="font-semibold">Frequência para limite legal: {presencaLimitePct}%</p>
+                <p className="text-xs text-slate-500 mt-1">
+                  Faltas justificadas permanecem no histórico real, mas não entram no limite de 25%.
+                </p>
+              </div>
+
+              {faltasLimitePct >= 25 && (
                 <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 rounded-xl flex items-center gap-2">
                   <AlertTriangle size={16} />
                   <div>
                     <p className="font-semibold">Alerta: faltas acima do limite</p>
-                    <p className="text-xs">Aluno atingiu ≥ 25% de faltas — necessita acompanhamento.</p>
+                    <p className="text-xs">Aluno atingiu {Math.round(faltasLimitePct)}% de faltas não justificadas — necessita acompanhamento.</p>
                   </div>
                 </div>
               )}
@@ -393,7 +472,9 @@ export default function PerfilAlunoModal({ aluno, aberto, onFechar }) {
         <p className="text-[11px] text-slate-400 flex items-center gap-1">
           <ShieldCheck size={11} /> Dados mascarados conforme LGPD
         </p>
-        <Button variante="secondary" icon={FileText}>Exportar PDF</Button>
+        <Button variante="secondary" icon={FileText} loading={gerandoPdf} onClick={exportarPDF}>
+          Exportar PDF
+        </Button>
       </div>
     </Modal>
   )

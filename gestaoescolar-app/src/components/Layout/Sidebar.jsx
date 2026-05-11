@@ -2,12 +2,14 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Users, ClipboardList, BookOpen,
   Wallet, AlertTriangle, FolderKanban, BarChart3,
-  Settings, LogOut, GraduationCap, Bell, ChevronDown,
-  School, Shield, ShieldCheck
+  Settings, LogOut, GraduationCap, ChevronDown,
+  School, Shield, ShieldCheck, BookMarked, Calendar
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { useState } from 'react'
 import NotificationBell from './NotificationBell'
+import { MODULOS_POR_PERFIL } from '../../config/permissoes'
+import Avatar from '../ui/Avatar'
 
 const MENU = [
   { secao: 'Visão Geral', items: [
@@ -17,7 +19,9 @@ const MENU = [
     { path: '/turmas',        label: 'Turmas',         icon: School,          modulo: 'turmas' },
     { path: '/alunos',        label: 'Alunos',         icon: Users,           modulo: 'alunos' },
     { path: '/chamada',       label: 'Chamada',        icon: ClipboardList,   modulo: 'chamada' },
+    { path: '/calendario',    label: 'Calendário',     icon: Calendar,        modulo: 'calendario' },
     { path: '/notas',         label: 'Notas',          icon: BookOpen,        modulo: 'notas' },
+    { path: '/disciplinas',   label: 'Disciplinas',    icon: BookMarked,      modulo: 'disciplinas' },
     { path: '/ocorrencias',   label: 'Ocorrências',    icon: AlertTriangle,   modulo: 'ocorrencias' },
   ]},
   { secao: 'Administrativo', items: [
@@ -31,14 +35,6 @@ const MENU = [
     { path: '/configuracoes', label: 'Configurações',  icon: Settings,        modulo: 'configuracoes' },
   ]},
 ]
-
-const MODULOS_POR_PERFIL = {
-  diretor:     ['dashboard','turmas','alunos','chamada','notas','financeiro','ocorrencias','projetos','relatorios','usuarios','auditoria','configuracoes'],
-  coordenador: ['dashboard','turmas','alunos','chamada','notas','ocorrencias','projetos','relatorios'],
-  professor:   ['dashboard','turmas','chamada','notas'],
-  admin:       ['dashboard','financeiro','projetos','usuarios','auditoria','configuracoes','relatorios'],
-  secretaria:  ['dashboard','relatorios'],
-}
 
 const BADGE_PERFIL = {
   diretor:     { label: 'Diretor(a)',     cor: 'bg-purple-500/15 text-purple-300 ring-purple-500/30' },
@@ -60,10 +56,6 @@ export default function Sidebar() {
     await logout()
     navigate('/login')
   }
-
-  const iniciais = perfil?.nome
-    ? perfil.nome.split(' ').slice(0, 2).map(n => n[0]).join('').toUpperCase()
-    : '?'
 
   return (
     <aside className="w-64 min-h-screen bg-gradient-to-b from-slate-950 to-slate-900 flex flex-col shrink-0 border-r border-slate-800/50">
@@ -139,9 +131,7 @@ export default function Sidebar() {
           onClick={() => setUserMenuOpen(v => !v)}
           className="w-full flex items-center gap-3 p-2 rounded-xl hover:bg-slate-800/60 transition-colors group"
         >
-          <div className="w-9 h-9 bg-gradient-to-br from-slate-700 to-slate-800 rounded-lg ring-1 ring-slate-600 flex items-center justify-center text-xs font-bold text-white shrink-0">
-            {iniciais}
-          </div>
+          <Avatar nome={perfil?.nome} src={perfil?.foto_url} tamanho="md" />
           <div className="flex-1 min-w-0 text-left">
             <p className="text-white text-xs font-semibold truncate">{perfil?.nome ?? 'Usuário'}</p>
             {badge && (

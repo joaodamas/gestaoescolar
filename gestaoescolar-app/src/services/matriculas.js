@@ -52,3 +52,10 @@ export async function encerrarMatricula(matriculaId) {
     updated_at: serverTimestamp(),
   })
 }
+
+export async function atualizarMatricula(matriculaId, dados) {
+  return updateDoc(doc(db, 'matriculas', matriculaId), {
+    ...dados,
+    updated_at: serverTimestamp(),
+  })
+}

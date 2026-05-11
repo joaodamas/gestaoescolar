@@ -1,6 +1,6 @@
 import {
   collection, doc, addDoc, updateDoc, deleteDoc, getDocs,
-  query, where, orderBy, serverTimestamp
+  query, where, serverTimestamp
 } from 'firebase/firestore'
 import { db } from '../firebase/firebase'
 
@@ -9,11 +9,28 @@ const ANO_ATUAL = new Date().getFullYear()
 export async function listarCalendario(anoLetivo) {
   const q = query(
     collection(db, 'calendario'),
-    where('ano_letivo', '==', anoLetivo ?? ANO_ATUAL),
-    orderBy('data', 'asc')
+    where('ano_letivo', '==', anoLetivo ?? ANO_ATUAL)
   )
   const snap = await getDocs(q)
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+  return snap.docs
+    .map(d => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => (a.data ?? '').localeCompare(b.data ?? ''))
+}
+
+export async function listarProximosEventos(limite = 5, anoLetivo = ANO_ATUAL) {
+  const hoje = new Date()
+  const dataHoje = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`
+
+  const q = query(
+    collection(db, 'calendario'),
+    where('ano_letivo', '==', anoLetivo)
+  )
+  const snap = await getDocs(q)
+  return snap.docs
+    .map(d => ({ id: d.id, ...d.data() }))
+    .filter(ev => (ev.data ?? '') >= dataHoje)
+    .sort((a, b) => (a.data ?? '').localeCompare(b.data ?? ''))
+    .slice(0, limite)
 }
 
 /**
@@ -70,9 +87,8 @@ export async function removerEvento(id) {
 export async function contarDiasLetivos(anoLetivo) {
   const q = query(
     collection(db, 'calendario'),
-    where('ano_letivo', '==', anoLetivo ?? ANO_ATUAL),
-    where('tipo', 'in', ['aula', 'reposicao'])
+    where('ano_letivo', '==', anoLetivo ?? ANO_ATUAL)
   )
   const snap = await getDocs(q)
-  return snap.size
+  return snap.docs.filter(d => ['aula', 'reposicao'].includes(d.data().tipo)).length
 }

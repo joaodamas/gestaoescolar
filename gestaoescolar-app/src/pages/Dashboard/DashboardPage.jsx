@@ -6,7 +6,8 @@ import {
   Users, TrendingUp, GraduationCap, BookCheck, UserCog, Wallet,
   AlertTriangle, RefreshCw, FileDown, FlaskConical, Heart, Users2,
   ArrowUpRight, BookOpen, BookMarked, ChevronRight, Calendar,
-  ClipboardList, Activity, Target, Sparkles, Zap, ShieldAlert
+  ClipboardList, Activity, Target, Sparkles, Zap, ShieldAlert,
+  PartyPopper, Coffee, CalendarCheck, RotateCcw
 } from 'lucide-react'
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
@@ -16,6 +17,7 @@ import {
 import { listarProjetosDashboard } from '../../services/projetos'
 import { listarPendenciasDashboard } from '../../services/pendencias'
 import { buscarConfiguracoes } from '../../services/configuracoes'
+import { listarProximosEventos } from '../../services/calendario'
 import { Card, CardHeader, Badge, Spinner } from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 
@@ -45,20 +47,39 @@ const OCORRENCIAS_CONFIG = [
 
 const PROJETO_ICONES = [BookOpen, BookMarked, FlaskConical, Users2, Heart]
 
+const EVENTOS_CONFIG = {
+  feriado:   { label: 'Feriado',   variante: 'red',    icon: PartyPopper,  bg: 'bg-rose-50',    text: 'text-rose-600' },
+  recesso:   { label: 'Recesso',   variante: 'yellow', icon: Coffee,       bg: 'bg-amber-50',   text: 'text-amber-600' },
+  evento:    { label: 'Evento',    variante: 'blue',   icon: CalendarCheck,bg: 'bg-blue-50',    text: 'text-blue-600' },
+  reposicao: { label: 'Reposição', variante: 'green',  icon: RotateCcw,    bg: 'bg-emerald-50', text: 'text-emerald-600' },
+  aula:      { label: 'Aula',      variante: 'slate',  icon: BookOpen,     bg: 'bg-slate-50',   text: 'text-slate-600' },
+}
+
 export default function DashboardPage() {
   const { perfil } = useAuth()
   const [indicadores, setIndicadores] = useState(null)
   const [config, setConfig] = useState(null)
   const [projetos, setProjetos] = useState([])
   const [pendencias, setPendencias] = useState([])
+  const [eventos, setEventos] = useState([])
+  const [erroQuery, setErroQuery] = useState('')
   const [carregando, setCarregando] = useState(true)
 
   useEffect(() => {
     const ref = doc(db, 'indicadores', String(ANO_LETIVO))
-    const unsub = onSnapshot(ref, (snap) => {
-      setIndicadores(snap.exists() ? snap.data() : null)
-      setCarregando(false)
-    })
+    const unsub = onSnapshot(
+      ref,
+      (snap) => {
+        setIndicadores(snap.exists() ? snap.data() : null)
+        setCarregando(false)
+      },
+      (err) => {
+        console.error('Erro ao observar indicadores:', err)
+        setErroQuery('Erro ao carregar indicadores. Verifique permissões ou conexão.')
+        setIndicadores(null)
+        setCarregando(false)
+      }
+    )
     return unsub
   }, [])
 
@@ -66,6 +87,7 @@ export default function DashboardPage() {
     buscarConfiguracoes().then(setConfig)
     listarProjetosDashboard(5).then(setProjetos).catch(() => setProjetos([]))
     listarPendenciasDashboard(5).then(setPendencias).catch(() => setPendencias([]))
+    listarProximosEventos(5, ANO_LETIVO).then(setEventos).catch(() => setEventos([]))
   }, [])
 
   const presencaPct = +(indicadores?.presenca_media ?? 0)
@@ -115,6 +137,13 @@ export default function DashboardPage() {
   return (
     <div className="space-y-5">
       {/* HEADER em destaque — estilo da referência */}
+      {erroQuery && (
+        <div className="bg-rose-50 border border-rose-200 rounded-xl px-4 py-3 text-sm text-rose-800 flex items-start gap-2">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+          <span>{erroQuery}</span>
+        </div>
+      )}
+
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 text-white shadow-xl">
         <div className="absolute top-0 right-0 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/4" />
         <div className="absolute bottom-0 left-0 w-72 h-72 bg-purple-500/10 rounded-full blur-3xl translate-y-1/2 -translate-x-1/4" />
@@ -251,8 +280,8 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* LINHA: Projetos + Ocorrências + Pendências */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      {/* LINHA: Projetos + Eventos + Ocorrências + Pendências */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-4">
         {/* PROJETOS E AÇÕES */}
         <Card>
           <CardHeader titulo="PROJETOS E AÇÕES" descricao={`${projetos.length} em destaque`} />
@@ -274,6 +303,43 @@ export default function DashboardPage() {
                       </div>
                       <p className="text-sm text-slate-700 flex-1 truncate font-medium">{p.nome}</p>
                       <Badge variante={status.variante}>{status.label}</Badge>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </Card>
+
+        {/* PRÓXIMOS EVENTOS */}
+        <Card>
+          <CardHeader titulo="PRÓXIMOS EVENTOS" descricao={`${eventos.length} no calendário`} />
+          <div className="px-5 pb-4">
+            {eventos.length === 0 ? (
+              <div className="py-8 text-center text-xs text-slate-400">
+                <Calendar size={24} className="mx-auto mb-2 text-slate-300" />
+                Nenhum evento futuro cadastrado
+              </div>
+            ) : (
+              <div className="space-y-1">
+                {eventos.map(ev => {
+                  const cfg = EVENTOS_CONFIG[ev.tipo] ?? EVENTOS_CONFIG.evento
+                  const Icon = cfg.icon
+                  const dataFmt = ev.data ? new Date(`${ev.data}T00:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }) : '—'
+                  return (
+                    <div key={ev.id} className="flex items-center gap-3 py-2.5 border-b border-slate-100 last:border-0">
+                      <div className={`w-8 h-8 ${cfg.bg} rounded-lg flex items-center justify-center shrink-0`}>
+                        <Icon size={14} className={cfg.text} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-slate-700 font-medium truncate">
+                          {ev.descricao || cfg.label}
+                        </p>
+                        <p className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
+                          <Calendar size={10} /> {dataFmt}
+                        </p>
+                      </div>
+                      <Badge variante={cfg.variante}>{cfg.label}</Badge>
                     </div>
                   )
                 })}

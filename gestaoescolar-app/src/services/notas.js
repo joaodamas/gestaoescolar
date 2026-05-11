@@ -2,6 +2,7 @@ import {
   collection,
   doc,
   addDoc,
+  getDoc,
   updateDoc,
   getDocs,
   query,
@@ -61,10 +62,42 @@ export async function salvarNota(
   bimestre,
   anoLetivo,
   nota,
-  lancadoPor
+  lancadoPor,
+  extras = {}
 ) {
   const docId = `${alunoId}_${avaliacaoId}`
   const ref = doc(db, 'notas', docId)
+  const existente = await getDoc(ref)
+  const anterior = existente.exists() ? existente.data() : null
+  const camposHistorico = [
+    'nota',
+    'media_bimestral',
+    'nota_recuperacao',
+    'media_final',
+    'aprovado_conselho',
+    'situacao',
+  ]
+  const valorNovo = { nota, ...extras }
+  const mudou = !anterior || camposHistorico.some(campo => {
+    const antes = anterior[campo] ?? null
+    const depois = valorNovo[campo] ?? null
+    return antes !== depois
+  })
+  const historico = mudou
+    ? [
+        ...(anterior?.historico_alteracoes ?? []),
+        {
+          acao: anterior ? 'atualizar_nota' : 'criar_nota',
+          usuario_id: lancadoPor,
+          timestamp: new Date().toISOString(),
+          valor_anterior: anterior
+            ? Object.fromEntries(camposHistorico.map(campo => [campo, anterior[campo] ?? null]))
+            : null,
+          valor_novo: Object.fromEntries(camposHistorico.map(campo => [campo, valorNovo[campo] ?? null])),
+        },
+      ]
+    : (anterior?.historico_alteracoes ?? [])
+
   return setDoc(
     ref,
     {
@@ -76,7 +109,9 @@ export async function salvarNota(
       ano_letivo: anoLetivo ?? ANO_ATUAL,
       nota,
       lancado_por: lancadoPor,
-      fechado: false,
+      fechado: anterior?.fechado ?? false,
+      ...extras,
+      historico_alteracoes: historico,
       updated_at: serverTimestamp(),
     },
     { merge: true }
@@ -150,10 +185,12 @@ export async function fecharBimestre(turmaId, disciplinaId, bimestre, anoLetivo,
 export async function listarDisciplinasDaTurma(turmaId, anoLetivo) {
   const q = query(
     collection(db, 'disciplinas'),
-    where('turma_id', '==', turmaId),
-    where('ano_letivo', '==', anoLetivo ?? ANO_ATUAL),
-    orderBy('nome', 'asc')
+    where('ano_letivo', '==', anoLetivo ?? ANO_ATUAL)
   )
   const snap = await getDocs(q)
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+  return snap.docs
+    .map(d => ({ id: d.id, ...d.data() }))
+    .filter(d => d.turma_id === turmaId)
+    .filter(d => d.ativa !== false)
+    .sort((a, b) => (a.nome ?? '').localeCompare(b.nome ?? '', 'pt-BR'))
 }

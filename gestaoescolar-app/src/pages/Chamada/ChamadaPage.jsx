@@ -3,9 +3,9 @@ import { collection, query, where, getDocs, getDoc, doc } from 'firebase/firesto
 import { db } from '../../firebase/firebase'
 import { useAuth } from '../../context/AuthContext'
 import { listarTurmas } from '../../services/turmas'
-import { salvarChamada, buscarChamadaDoDia } from '../../services/presencas'
+import { salvarChamada, buscarChamadaDoDia, historicoChamadas } from '../../services/presencas'
 import { verificarDiaLetivo } from '../../services/calendario'
-import { CheckCircle2, XCircle, Clock, Save, AlertTriangle, CalendarDays, Info } from 'lucide-react'
+import { CheckCircle2, XCircle, Clock, Save, AlertTriangle, CalendarDays, Info, History, X } from 'lucide-react'
 
 const hoje = () => new Date().toISOString().split('T')[0]
 
@@ -30,6 +30,10 @@ export default function ChamadaPage() {
   const [sucesso, setSucesso]     = useState(false)
   const [carregando, setCarregando] = useState(false)
   const [statusCalendario, setStatusCalendario] = useState(null)
+  const [historicoAberto, setHistoricoAberto] = useState(false)
+  const [historico, setHistorico] = useState([])
+  const [carregandoHistorico, setCarregandoHistorico] = useState(false)
+  const [erro, setErro] = useState('')
 
   // Carrega turmas (professor vê só as suas)
   useEffect(() => {
@@ -100,8 +104,31 @@ export default function ChamadaPage() {
       setCarregando(false)
     }
 
-    carregar().catch(console.error)
+    carregar().catch(err => {
+      console.error(err)
+      setErro('Erro ao carregar chamada. Verifique permissões/índices.')
+      setAlunos([])
+      setChamada({})
+      setCarregando(false)
+    })
   }, [turmaSel, data])
+
+  async function abrirHistorico() {
+    if (!turmaSel) return
+    setHistoricoAberto(true)
+    setCarregandoHistorico(true)
+    setErro('')
+    try {
+      const lista = await historicoChamadas(turmaSel, 12)
+      setHistorico(lista)
+    } catch (err) {
+      console.error(err)
+      setErro('Erro ao carregar histórico de chamadas.')
+      setHistorico([])
+    } finally {
+      setCarregandoHistorico(false)
+    }
+  }
 
   function marcar(alunoId, status) {
     if (bloqueada) return
@@ -175,6 +202,13 @@ export default function ChamadaPage() {
         </div>
         {turmaSel && (
           <div className="flex gap-3 ml-auto">
+            <button
+              type="button"
+              onClick={abrirHistorico}
+              className="flex items-center gap-1.5 text-sm font-medium text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors"
+            >
+              <History size={14} /> Histórico
+            </button>
             <span className="flex items-center gap-1.5 text-sm font-medium text-green-600 bg-green-50 px-3 py-1.5 rounded-lg">
               <CheckCircle2 size={14} /> {presentes}
             </span>
@@ -189,6 +223,13 @@ export default function ChamadaPage() {
       </div>
 
       {/* Avisos */}
+      {erro && (
+        <div className="flex items-start gap-3 bg-rose-50 border border-rose-200 text-rose-800 text-sm px-4 py-3 rounded-xl">
+          <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+          <span>{erro}</span>
+        </div>
+      )}
+
       {statusCalendario && !statusCalendario.ehLetivo && turmaSel && (
         <div className="flex items-start gap-3 bg-rose-50 border border-rose-200 text-rose-800 text-sm px-4 py-3 rounded-xl">
           <Info size={16} className="shrink-0 mt-0.5" />
@@ -297,6 +338,70 @@ export default function ChamadaPage() {
         <div className="flex flex-col items-center justify-center h-64 text-slate-300">
           <CalendarDays size={48} className="mb-3" />
           <p className="text-sm text-slate-400">Selecione uma turma para registrar a chamada</p>
+        </div>
+      )}
+
+      {historicoAberto && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[80vh] overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-semibold text-slate-900">Histórico de chamadas</h2>
+                <p className="text-xs text-slate-500">Últimos registros da turma selecionada</p>
+              </div>
+              <button
+                onClick={() => setHistoricoAberto(false)}
+                className="w-8 h-8 rounded-lg hover:bg-slate-100 text-slate-500 flex items-center justify-center"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="p-5 overflow-y-auto max-h-[65vh]">
+              {carregandoHistorico ? (
+                <div className="flex justify-center py-12">
+                  <div className="w-6 h-6 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : historico.length === 0 ? (
+                <div className="py-12 text-center text-sm text-slate-400">
+                  Nenhuma chamada registrada para esta turma.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {historico.map(item => {
+                    const presentes = item.registros.filter(r => r.status === 'presente').length
+                    const ausentes = item.registros.filter(r => r.status === 'ausente').length
+                    const justificados = item.registros.filter(r => r.status === 'justificado').length
+                    return (
+                      <button
+                        key={item.data}
+                        type="button"
+                        onClick={() => {
+                          setData(item.data)
+                          setHistoricoAberto(false)
+                        }}
+                        className="w-full text-left border border-slate-200 rounded-xl px-4 py-3 hover:bg-slate-50 transition-colors"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-900">
+                              {new Date(`${item.data}T00:00:00`).toLocaleDateString('pt-BR')}
+                            </p>
+                            <p className="text-xs text-slate-500">{item.registros.length} registros</p>
+                          </div>
+                          <div className="flex gap-2">
+                            <span className="text-xs font-semibold text-green-700 bg-green-50 px-2 py-1 rounded">{presentes} P</span>
+                            <span className="text-xs font-semibold text-red-700 bg-red-50 px-2 py-1 rounded">{ausentes} F</span>
+                            <span className="text-xs font-semibold text-amber-700 bg-amber-50 px-2 py-1 rounded">{justificados} J</span>
+                          </div>
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>

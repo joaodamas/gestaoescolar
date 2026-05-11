@@ -12,11 +12,17 @@ const DEFAULTS = {
   meta_saeb: 6.0,
   orcamento_previsto: 0,
   limite_comprovante: 500,
+  pdde_alerta_dias: 15,
   saeb_historico: {},
   regras_nota: {
     prova: 0.6,
     trabalho: 0.3,
     participacao: 0.1,
+  },
+  regras_recuperacao_final: {
+    media_aprovacao: 6,
+    media_recuperacao_minima: 4,
+    usar_maior_nota: true,
   },
   missao: 'Garantir aprendizagens significativas e formar cidadãos para a vida.',
   valores: ['Respeito', 'Responsabilidade', 'Colaboração', 'Excelência', 'Equidade'],

@@ -15,9 +15,17 @@ export async function listarUsuarios(filtros = {}) {
   return snap.docs.map(d => ({ id: d.id, ...d.data() }))
 }
 
-export function observarUsuarios(callback) {
+export function observarUsuarios(callback, errorCallback) {
   const q = query(collection(db, 'usuarios'), orderBy('nome'))
-  return onSnapshot(q, snap => callback(snap.docs.map(d => ({ id: d.id, ...d.data() }))))
+  return onSnapshot(
+    q,
+    snap => callback(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+    err => {
+      console.error('Erro ao observar usuários:', err)
+      errorCallback?.(err)
+      callback([])
+    }
+  )
 }
 
 export async function buscarUsuario(uid) {

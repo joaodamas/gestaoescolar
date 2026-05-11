@@ -114,6 +114,24 @@
       ]
     },
     {
+      "collectionGroup": "disciplinas",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "ativa", "order": "ASCENDING" },
+        { "fieldPath": "ano_letivo", "order": "ASCENDING" },
+        { "fieldPath": "nome", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "disciplinas",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "professor_id", "order": "ASCENDING" },
+        { "fieldPath": "ano_letivo", "order": "ASCENDING" },
+        { "fieldPath": "nome", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "ocorrencias",
       "queryScope": "COLLECTION",
       "fields": [
@@ -184,6 +202,14 @@
       "fields": [
         { "fieldPath": "ano_letivo", "order": "ASCENDING" },
         { "fieldPath": "tipo", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "calendario",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "ano_letivo", "order": "ASCENDING" },
+        { "fieldPath": "data", "order": "ASCENDING" }
       ]
     },
     {

@@ -1,6 +1,6 @@
 import {
   collection, doc, getDoc, getDocs, updateDoc, writeBatch,
-  query, where, orderBy, limit, serverTimestamp, Timestamp
+  query, where, serverTimestamp, Timestamp
 } from 'firebase/firestore'
 import { db } from '../firebase/firebase'
 
@@ -36,6 +36,7 @@ export async function salvarChamada(entradas, professorId) {
         turma_id: turmaId,
         disciplina_id: disciplinaId ?? '',
         data,
+        ano_letivo: Number(data?.slice(0, 4)) || new Date().getFullYear(),
         status,
         justificativa: justificativa ?? '',
         professor_id: professorId,
@@ -62,12 +63,9 @@ export async function buscarChamadaDoDia(turmaId, data) {
 
 // M-4 QA: usa limit no Firestore em vez de fatiar no cliente
 export async function historicoChamadas(turmaId, limiteDatas = 10) {
-  const maxDocs = limiteDatas * 40 // estimativa de até 40 alunos por turma
   const q = query(
     collection(db, 'presencas'),
-    where('turma_id', '==', turmaId),
-    orderBy('data', 'desc'),
-    limit(maxDocs)
+    where('turma_id', '==', turmaId)
   )
   const snap = await getDocs(q)
   const porData = {}
@@ -76,5 +74,8 @@ export async function historicoChamadas(turmaId, limiteDatas = 10) {
     if (!porData[dado.data]) porData[dado.data] = []
     porData[dado.data].push({ id: d.id, ...dado })
   })
-  return Object.entries(porData).slice(0, limiteDatas).map(([data, registros]) => ({ data, registros }))
+  return Object.entries(porData)
+    .sort(([a], [b]) => b.localeCompare(a))
+    .slice(0, limiteDatas)
+    .map(([data, registros]) => ({ data, registros }))
 }

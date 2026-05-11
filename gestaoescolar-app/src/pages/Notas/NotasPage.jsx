@@ -13,6 +13,7 @@ import {
   calcularMediaBimestral,
   fecharBimestre,
 } from '../../services/notas'
+import { buscarConfiguracoes } from '../../services/configuracoes'
 import {
   Plus,
   Save,
@@ -40,10 +41,12 @@ const TIPOS_AVALIACAO = [
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function calcularSituacao(media) {
+function calcularSituacao(media, regras = {}) {
   if (media === null || media === undefined) return null
-  if (media >= 6.0) return 'aprovado'
-  if (media >= 4.0) return 'recuperacao'
+  const mediaAprovacao = Number(regras.media_aprovacao) || 6
+  const mediaRecuperacao = Number(regras.media_recuperacao_minima) || 4
+  if (media >= mediaAprovacao) return 'aprovado'
+  if (media >= mediaRecuperacao) return 'recuperacao'
   return 'reprovado'
 }
 
@@ -221,6 +224,7 @@ export default function NotasPage() {
   const perfilTipo = perfil?.perfil ?? ''
   const isProfessor = perfilTipo === 'professor'
   const isGestor = ['diretor', 'coordenador', 'admin'].includes(perfilTipo)
+  const podeAprovarConselho = ['diretor', 'coordenador'].includes(perfilTipo)
 
   // ── Filtros ────────────────────────────────────────────────────────────────
   const [turmas, setTurmas]           = useState([])
@@ -232,8 +236,15 @@ export default function NotasPage() {
   // ── Dados ──────────────────────────────────────────────────────────────────
   const [alunos, setAlunos]           = useState([])
   const [avaliacoes, setAvaliacoes]   = useState([])
+  const [regrasRecuperacao, setRegrasRecuperacao] = useState({
+    media_aprovacao: 6,
+    media_recuperacao_minima: 4,
+    usar_maior_nota: true,
+  })
   // { [alunoId_avaliacaoId]: { nota, id } }
   const [notasMap, setNotasMap]       = useState({})
+  const [recuperacaoMap, setRecuperacaoMap] = useState({})
+  const [conselhoMap, setConselhoMap] = useState({})
 
   // ── Estado UI ──────────────────────────────────────────────────────────────
   const [modoEdicao, setModoEdicao]   = useState(false)
@@ -250,6 +261,8 @@ export default function NotasPage() {
 
   // Rascunho das notas editadas localmente antes de salvar
   const [rascunho, setRascunho] = useState({})
+  const [rascunhoRecuperacao, setRascunhoRecuperacao] = useState({})
+  const [rascunhoConselho, setRascunhoConselho] = useState({})
 
   // ── Carrega turmas ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -261,7 +274,25 @@ export default function NotasPage() {
       const minhas = todas.filter(t => perfil?.turmas_ids?.includes(t.id))
       setTurmas(minhas)
       if (minhas.length === 1) setTurmaSel(minhas[0].id)
+    }).catch(err => {
+      console.error(err)
+      setMsgErro('Erro ao carregar turmas. Verifique permissões/índices.')
     })
+  }, [])
+
+  useEffect(() => {
+    buscarConfiguracoes()
+      .then(cfg => {
+        setRegrasRecuperacao({
+          media_aprovacao: Number(cfg.regras_recuperacao_final?.media_aprovacao) || 6,
+          media_recuperacao_minima: Number(cfg.regras_recuperacao_final?.media_recuperacao_minima) || 4,
+          usar_maior_nota: cfg.regras_recuperacao_final?.usar_maior_nota ?? true,
+        })
+      })
+      .catch(err => {
+        console.error(err)
+        setMsgErro('Erro ao carregar regras de recuperação. Usando configuração padrão.')
+      })
   }, [])
 
   // ── Carrega disciplinas quando turma muda ──────────────────────────────────
@@ -270,6 +301,11 @@ export default function NotasPage() {
     listarDisciplinasDaTurma(turmaSel, ANO_LETIVO).then(lista => {
       setDisciplinas(lista)
       setDiscSel('')
+    }).catch(err => {
+      console.error(err)
+      setDisciplinas([])
+      setDiscSel('')
+      setMsgErro('Erro ao carregar disciplinas. Verifique permissões/índices.')
     })
   }, [turmaSel])
 
@@ -293,7 +329,11 @@ export default function NotasPage() {
             .sort((a, b) => a.nome_completo.localeCompare(b.nome_completo))
         )
       })
-      .catch(console.error)
+      .catch(err => {
+        console.error(err)
+        setAlunos([])
+        setMsgErro('Erro ao carregar alunos da turma. Verifique permissões/índices.')
+      })
       .finally(() => setCarregandoAlunos(false))
   }, [turmaSel])
 
@@ -324,18 +364,37 @@ export default function NotasPage() {
       ).flat()
 
       const mapa = {}
+      const recuperacoes = {}
+      const conselhos = {}
       let algumFechado = false
       todasNotas.forEach(n => {
         const chave = `${n.aluno_id}_${n.avaliacao_id}`
         mapa[chave] = { nota: n.nota, id: n.id, fechado: n.fechado }
+        if (n.nota_recuperacao !== undefined && n.nota_recuperacao !== null) {
+          recuperacoes[n.aluno_id] = n.nota_recuperacao
+        }
+        if (n.aprovado_conselho !== undefined) {
+          conselhos[n.aluno_id] = !!n.aprovado_conselho
+        }
         if (n.fechado) algumFechado = true
       })
       setNotasMap(mapa)
+      setRecuperacaoMap(recuperacoes)
+      setConselhoMap(conselhos)
       setRascunho({})
+      setRascunhoRecuperacao({})
+      setRascunhoConselho({})
       setBimestreFechado(algumFechado)
     }
 
-    carregar().catch(console.error).finally(() => setCarregandoAvaliacoes(false))
+    carregar().catch(err => {
+      console.error(err)
+      setAvaliacoes([])
+      setNotasMap({})
+      setRecuperacaoMap({})
+      setConselhoMap({})
+      setMsgErro('Erro ao carregar avaliações/notas. Verifique permissões/índices.')
+    }).finally(() => setCarregandoAvaliacoes(false))
   }, [turmaSel, discSel, bimestre])
 
   // ── Permissão de edição ────────────────────────────────────────────────────
@@ -354,6 +413,16 @@ export default function NotasPage() {
     setRascunho(prev => ({ ...prev, [chave]: valor }))
   }
 
+  function valorRecuperacao(alunoId) {
+    if (alunoId in rascunhoRecuperacao) return rascunhoRecuperacao[alunoId]
+    return recuperacaoMap[alunoId] ?? ''
+  }
+
+  function valorConselho(alunoId) {
+    if (alunoId in rascunhoConselho) return rascunhoConselho[alunoId]
+    return conselhoMap[alunoId] ?? false
+  }
+
   // ── Médias calculadas em tempo real ───────────────────────────────────────
   const medias = useMemo(() => {
     const resultado = {}
@@ -363,34 +432,75 @@ export default function NotasPage() {
         const valor = chave in rascunho ? rascunho[chave] : (notasMap[chave]?.nota ?? '')
         return { avaliacao_id: av.id, nota: valor === '' ? null : Number(valor) }
       })
-      resultado[aluno.id] = calcularMediaBimestral(notasDoAluno, avaliacoes)
+      const mediaBase = calcularMediaBimestral(notasDoAluno, avaliacoes)
+      const recuperacaoBruta = valorRecuperacao(aluno.id)
+      const recuperacao = recuperacaoBruta === '' ? null : Number(recuperacaoBruta)
+      const mediaFinal = recuperacao !== null && !Number.isNaN(recuperacao)
+        ? regrasRecuperacao.usar_maior_nota
+          ? Math.max(mediaBase ?? recuperacao, recuperacao)
+          : (((mediaBase ?? recuperacao) + recuperacao) / 2)
+        : mediaBase
+      const aprovadoConselho = valorConselho(aluno.id)
+      resultado[aluno.id] = {
+        base: mediaBase,
+        recuperacao,
+        final: aprovadoConselho && mediaFinal !== null && mediaFinal < regrasRecuperacao.media_aprovacao
+          ? regrasRecuperacao.media_aprovacao
+          : mediaFinal,
+        aprovadoConselho,
+      }
     })
     return resultado
-  }, [alunos, avaliacoes, rascunho, notasMap])
+  }, [alunos, avaliacoes, rascunho, notasMap, rascunhoRecuperacao, recuperacaoMap, rascunhoConselho, conselhoMap, regrasRecuperacao])
 
   // ── Salvar rascunho ───────────────────────────────────────────────────────
   async function salvarRascunho() {
-    if (!Object.keys(rascunho).length) {
+    const temNotas = Object.keys(rascunho).length > 0
+    const temRecuperacao = Object.keys(rascunhoRecuperacao).length > 0
+    const temConselho = Object.keys(rascunhoConselho).length > 0
+
+    if (!temNotas && !temRecuperacao && !temConselho) {
       setMsgSucesso('Nenhuma alteração para salvar.')
       return
     }
     setSalvandoRasc(true)
     setMsgErro('')
     try {
+      const alunosAfetados = new Set([
+        ...Object.keys(rascunho).map(chave => chave.split('_')[0]),
+        ...Object.keys(rascunhoRecuperacao),
+        ...Object.keys(rascunhoConselho),
+      ])
+
       await Promise.all(
-        Object.entries(rascunho).map(([chave, valorBruto]) => {
-          const [alunoId, avaliacaoId] = chave.split('_')
-          const nota = valorBruto === '' ? null : Number(valorBruto)
-          return salvarNota(
-            alunoId,
-            avaliacaoId,
-            discSel,
-            turmaSel,
-            bimestre,
-            ANO_LETIVO,
-            nota,
-            user.uid
-          )
+        Array.from(alunosAfetados).flatMap(alunoId => {
+          const mediaInfo = medias[alunoId] ?? {}
+          const extras = {
+            media_bimestral: mediaInfo.base ?? null,
+            nota_recuperacao: mediaInfo.recuperacao ?? null,
+            media_final: mediaInfo.final ?? null,
+            aprovado_conselho: !!mediaInfo.aprovadoConselho,
+            situacao: calcularSituacao(mediaInfo.final, regrasRecuperacao),
+          }
+
+          return avaliacoes.map(avaliacao => {
+            const chave = `${alunoId}_${avaliacao.id}`
+            const valorBruto = chave in rascunho
+              ? rascunho[chave]
+              : (notasMap[chave]?.nota ?? null)
+            const nota = valorBruto === '' ? null : Number(valorBruto)
+            return salvarNota(
+              alunoId,
+              avaliacao.id,
+              discSel,
+              turmaSel,
+              bimestre,
+              ANO_LETIVO,
+              nota,
+              user.uid,
+              extras
+            )
+          })
         })
       )
 
@@ -406,6 +516,10 @@ export default function NotasPage() {
         return novo
       })
       setRascunho({})
+      setRecuperacaoMap(prev => ({ ...prev, ...rascunhoRecuperacao }))
+      setConselhoMap(prev => ({ ...prev, ...rascunhoConselho }))
+      setRascunhoRecuperacao({})
+      setRascunhoConselho({})
       setMsgSucesso('Rascunho salvo com sucesso!')
       setTimeout(() => setMsgSucesso(''), 4000)
     } catch (err) {
@@ -424,7 +538,11 @@ export default function NotasPage() {
     if (!confirmado) return
 
     // Salva qualquer rascunho pendente antes de fechar
-    if (Object.keys(rascunho).length > 0) await salvarRascunho()
+    if (
+      Object.keys(rascunho).length > 0 ||
+      Object.keys(rascunhoRecuperacao).length > 0 ||
+      Object.keys(rascunhoConselho).length > 0
+    ) await salvarRascunho()
 
     setFechandoBim(true)
     setMsgErro('')
@@ -709,7 +827,13 @@ export default function NotasPage() {
                         </th>
                       ))}
                       <th className="text-center px-3 py-3 font-medium text-slate-600 min-w-32">
-                        Média Bimestral
+                        Recuperação
+                      </th>
+                      <th className="text-center px-3 py-3 font-medium text-slate-600 min-w-28">
+                        Conselho
+                      </th>
+                      <th className="text-center px-3 py-3 font-medium text-slate-600 min-w-32">
+                        Média Final
                       </th>
                       <th className="text-center px-3 py-3 font-medium text-slate-600 min-w-28">
                         Situação
@@ -721,9 +845,12 @@ export default function NotasPage() {
                   </thead>
                   <tbody className="divide-y divide-slate-50">
                     {alunos.map((aluno, idx) => {
-                      const media = medias[aluno.id]
-                      const situacao = calcularSituacao(media)
+                      const mediaInfo = medias[aluno.id] ?? {}
+                      const media = mediaInfo.final
+                      const situacao = calcularSituacao(media, regrasRecuperacao)
                       const emRisco = situacao && situacao !== 'aprovado'
+                      const recuperacao = valorRecuperacao(aluno.id)
+                      const aprovadoConselho = valorConselho(aluno.id)
 
                       return (
                         <tr
@@ -775,7 +902,46 @@ export default function NotasPage() {
                             )
                           })}
 
-                          {/* Média bimestral */}
+                          {/* Recuperação */}
+                          <td className="px-3 py-2 text-center">
+                            {modoEdicao && podeEditar ? (
+                              <input
+                                type="number"
+                                min={0}
+                                max={10}
+                                step={0.1}
+                                value={recuperacao}
+                                onChange={e => setRascunhoRecuperacao(prev => ({ ...prev, [aluno.id]: e.target.value }))}
+                                className="w-20 text-center px-2 py-1 text-sm border border-amber-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 bg-amber-50"
+                              />
+                            ) : (
+                              <span className="inline-block w-16 text-center py-1 rounded-lg text-sm font-medium text-slate-700">
+                                {recuperacao !== '' && recuperacao !== null && recuperacao !== undefined
+                                  ? Number(recuperacao).toFixed(1)
+                                  : '—'}
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Conselho */}
+                          <td className="px-3 py-2 text-center">
+                            {modoEdicao && podeAprovarConselho ? (
+                              <label className="inline-flex items-center justify-center">
+                                <input
+                                  type="checkbox"
+                                  checked={aprovadoConselho}
+                                  onChange={e => setRascunhoConselho(prev => ({ ...prev, [aluno.id]: e.target.checked }))}
+                                  className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                />
+                              </label>
+                            ) : aprovadoConselho ? (
+                              <BadgeSituacao situacao="aprovado" />
+                            ) : (
+                              <span className="text-slate-300 text-xs">—</span>
+                            )}
+                          </td>
+
+                          {/* Média final */}
                           <td className="px-3 py-3 text-center">
                             {media !== null && media !== undefined ? (
                               <span className={`inline-block font-bold text-base ${

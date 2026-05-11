@@ -1,7 +1,8 @@
 import {
   collection, doc, getDoc, getDocs,
-  query, where, orderBy, limit, startAfter, onSnapshot
+  query, where, orderBy, limit, onSnapshot
 } from 'firebase/firestore'
+import { getFunctions, httpsCallable } from 'firebase/functions'
 import { db } from '../firebase/firebase'
 
 /**
@@ -51,4 +52,51 @@ export function observarAuditoriaRecente(qtd, callback, errorCallback) {
 export async function buscarAuditoria(id) {
   const snap = await getDoc(doc(db, 'auditoria', id))
   return snap.exists() ? { id: snap.id, ...snap.data() } : null
+}
+
+/**
+ * Grava um registro de auditoria via Cloud Function callable.
+ *
+ * /auditoria tem regra `allow write: if false` no Firestore Rules — apenas
+ * Cloud Functions (que rodam com privilégios de admin) podem gravar nessa
+ * coleção. Use este helper quando uma ação crítica do frontend não estiver
+ * coberta por um trigger automático.
+ *
+ * @param {Object} params
+ * @param {string} params.usuarioId      uid do usuário que executou a ação
+ * @param {string} params.perfil         perfil do usuário (diretor|coordenador|...)
+ * @param {string} params.acao           código da ação (ex: 'NOTA_ALTERADA_POS_FECHAMENTO')
+ * @param {string} params.modulo         módulo (ex: 'notas', 'financeiro')
+ * @param {string} params.entidade       coleção afetada (ex: 'notas')
+ * @param {string} params.entidadeId     id do documento afetado
+ * @param {*}      params.valorAnterior  snapshot antes da alteração
+ * @param {*}      params.valorNovo      snapshot depois da alteração
+ * @param {string} params.motivo         justificativa textual
+ * @returns {Promise<{ ok: boolean, id: string }>}
+ */
+export async function auditarAcao({
+  usuarioId,
+  perfil,
+  acao,
+  modulo,
+  entidade,
+  entidadeId,
+  valorAnterior,
+  valorNovo,
+  motivo,
+}) {
+  const functions = getFunctions(undefined, 'southamerica-east1')
+  const callable = httpsCallable(functions, 'auditarAcaoCallable')
+  const resp = await callable({
+    usuarioId,
+    perfil,
+    acao,
+    modulo,
+    entidade,
+    entidadeId,
+    valorAnterior: valorAnterior ?? null,
+    valorNovo: valorNovo ?? null,
+    motivo: motivo ?? '',
+  })
+  return resp.data
 }

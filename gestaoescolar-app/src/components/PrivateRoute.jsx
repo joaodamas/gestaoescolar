@@ -1,13 +1,6 @@
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-
-const MODULOS_POR_PERFIL = {
-  diretor:     ['dashboard','turmas','alunos','chamada','notas','financeiro','ocorrencias','projetos','relatorios','usuarios','auditoria','configuracoes'],
-  coordenador: ['dashboard','turmas','alunos','chamada','notas','ocorrencias','projetos','relatorios'],
-  professor:   ['dashboard','turmas','chamada','notas'],
-  admin:       ['dashboard','financeiro','projetos','usuarios','auditoria','configuracoes','relatorios'],
-  secretaria:  ['dashboard','relatorios'],
-}
+import { perfilPodeAcessarModulo } from '../config/permissoes'
 
 export default function PrivateRoute({ children, modulo }) {
   const { user, perfil, loading } = useAuth()
@@ -24,7 +17,7 @@ export default function PrivateRoute({ children, modulo }) {
     return <Navigate to="/login" replace />
   }
 
-  if (modulo && !MODULOS_POR_PERFIL[perfil.perfil]?.includes(modulo)) {
+  if (!perfilPodeAcessarModulo(perfil.perfil, modulo)) {
     return <Navigate to="/dashboard" replace />
   }
 

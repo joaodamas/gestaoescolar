@@ -6,8 +6,11 @@ import { useAuth } from '../../context/AuthContext'
 const ICONE_POR_TIPO = {
   alerta_faltas:   { icon: AlertTriangle, cor: 'text-rose-600 bg-rose-100' },
   prazo_pendencia: { icon: Calendar,      cor: 'text-amber-600 bg-amber-100' },
+  pdde_prazo:      { icon: Calendar,      cor: 'text-blue-600 bg-blue-100' },
   nota_alterada:   { icon: BookOpen,      cor: 'text-purple-600 bg-purple-100' },
+  ocorrencia_grave:{ icon: AlertTriangle, cor: 'text-rose-600 bg-rose-100' },
   despesa:         { icon: Wallet,        cor: 'text-emerald-600 bg-emerald-100' },
+  despesa_pendente:{ icon: Wallet,        cor: 'text-amber-600 bg-amber-100' },
   default:         { icon: Bell,          cor: 'text-blue-600 bg-blue-100' },
 }
 

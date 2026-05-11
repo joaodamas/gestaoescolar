@@ -6,13 +6,15 @@ import { criarProjeto, atualizarStatusProjeto } from '../../services/projetos'
 import { criarPendencia, atualizarPendencia } from '../../services/pendencias'
 import {
   FolderKanban, Plus, Calendar, User, Target,
-  AlertCircle, CheckCircle2, Circle, Clock, X
+  AlertCircle, CheckCircle2, Circle, Clock, X, Flag, BarChart3
 } from 'lucide-react'
 import PageHeader from '../../components/ui/PageHeader'
 import { Card, CardHeader, Badge, EmptyState, Spinner } from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import { Input, Select, Textarea } from '../../components/ui/Input'
 import Modal from '../../components/ui/Modal'
+import Tabs from '../../components/ui/Tabs'
+import { useToast } from '../../components/ui/Toast'
 
 const COLUNAS = [
   { id: 'planejado',    label: 'Planejado',    cor: 'blue',    icon: Circle },
@@ -31,6 +33,7 @@ const TIPOS_PENDENCIA = ['PDDE', 'Conselho PDE', 'Plano de Ação', 'Formação'
 
 export default function ProjetosPage() {
   const { user, perfil } = useAuth()
+  const toast = useToast()
   const podeGerenciar = ['diretor', 'coordenador', 'admin'].includes(perfil?.perfil)
 
   const [projetos, setProjetos] = useState([])
@@ -40,8 +43,11 @@ export default function ProjetosPage() {
 
   const [modalProj, setModalProj] = useState(false)
   const [modalPend, setModalPend] = useState(false)
+  const [modalDetalhes, setModalDetalhes] = useState(null)
+  const [arrastandoId, setArrastandoId] = useState(null)
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
+  const [erroQuery, setErroQuery] = useState('')
 
   const [formProj, setFormProj] = useState({
     nome: '', descricao: '', categoria: '', status: 'planejado',
@@ -55,14 +61,29 @@ export default function ProjetosPage() {
 
   useEffect(() => {
     const qp = query(collection(db, 'projetos'), orderBy('data_inicio', 'desc'))
-    const unsubP = onSnapshot(qp, snap => {
-      setProjetos(snap.docs.map(d => ({ id: d.id, ...d.data() })))
-      setCarregando(false)
-    })
+    const unsubP = onSnapshot(
+      qp,
+      snap => {
+        setProjetos(snap.docs.map(d => ({ id: d.id, ...d.data() })))
+        setCarregando(false)
+      },
+      err => {
+        console.error('Erro ao observar projetos:', err)
+        setErroQuery('Erro ao carregar projetos. Verifique permissões/índices.')
+        setProjetos([])
+        setCarregando(false)
+      }
+    )
     const qe = query(collection(db, 'pendencias'), orderBy('data_prazo', 'asc'))
-    const unsubE = onSnapshot(qe, snap => {
-      setPendencias(snap.docs.map(d => ({ id: d.id, ...d.data() })))
-    })
+    const unsubE = onSnapshot(
+      qe,
+      snap => setPendencias(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+      err => {
+        console.error('Erro ao observar pendências:', err)
+        setErroQuery('Erro ao carregar pendências. Verifique permissões/índices.')
+        setPendencias([])
+      }
+    )
     return () => { unsubP(); unsubE() }
   }, [])
 
@@ -75,7 +96,8 @@ export default function ProjetosPage() {
       setModalProj(false)
       setFormProj({ nome: '', descricao: '', categoria: '', status: 'planejado', data_inicio: '', data_fim: '', meta: '', indicador_sucesso: '' })
       setErro('')
-    } catch (err) { setErro('Erro ao salvar.'); console.error(err) }
+      toast.success('Projeto criado com sucesso.')
+    } catch (err) { setErro('Erro ao salvar.'); toast.error('Erro ao salvar projeto.'); console.error(err) }
     finally { setSalvando(false) }
   }
 
@@ -89,7 +111,8 @@ export default function ProjetosPage() {
       setModalPend(false)
       setFormPend({ titulo: '', descricao: '', tipo: 'PDDE', data_prazo: '', status: 'pendente', responsavel_id: '', alerta_dias_antes: 15 })
       setErro('')
-    } catch (err) { setErro('Erro ao salvar.'); console.error(err) }
+      toast.success('Pendência criada com sucesso.')
+    } catch (err) { setErro('Erro ao salvar.'); toast.error('Erro ao salvar pendência.'); console.error(err) }
     finally { setSalvando(false) }
   }
 
@@ -98,6 +121,26 @@ export default function ProjetosPage() {
     const idx = ordem.indexOf(projeto.status)
     if (idx < 0 || idx >= ordem.length - 1) return
     await atualizarStatusProjeto(projeto.id, ordem[idx + 1], user.uid)
+  }
+
+  async function moverProjeto(projetoId, novoStatus) {
+    const projeto = projetos.find(p => p.id === projetoId)
+    if (!projeto || projeto.status === novoStatus || !podeGerenciar) return
+
+    setProjetos(prev => prev.map(p => p.id === projetoId ? { ...p, status: novoStatus } : p))
+    try {
+      await atualizarStatusProjeto(projetoId, novoStatus, user.uid)
+    } catch (err) {
+      console.error('Erro ao mover projeto:', err)
+      setProjetos(prev => prev.map(p => p.id === projetoId ? { ...p, status: projeto.status } : p))
+      setErroQuery('Erro ao mover projeto. Tente novamente.')
+      toast.error('Erro ao mover projeto.')
+    }
+  }
+
+  function formatarData(valor) {
+    if (!valor) return '—'
+    return new Date(valor + 'T00:00:00').toLocaleDateString('pt-BR')
   }
 
   if (carregando) return <div className="flex justify-center py-32"><Spinner size="lg" /></div>
@@ -125,15 +168,22 @@ export default function ProjetosPage() {
         }
       />
 
-      {/* Tabs */}
-      <div className="flex gap-1 mb-5 bg-slate-100 rounded-xl p-1 w-fit">
-        <button onClick={() => setAba('projetos')} className={`px-5 py-2 text-sm font-semibold rounded-lg transition-all ${aba === 'projetos' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}>
-          Projetos (Kanban)
-        </button>
-        <button onClick={() => setAba('pendencias')} className={`px-5 py-2 text-sm font-semibold rounded-lg transition-all ${aba === 'pendencias' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}>
-          Pendências
-        </button>
-      </div>
+      {erroQuery && (
+        <div className="mb-4 bg-rose-50 border border-rose-200 text-rose-800 text-sm px-4 py-3 rounded-xl flex items-start gap-2">
+          <AlertCircle size={16} className="mt-0.5 shrink-0" />
+          <span>{erroQuery}</span>
+        </div>
+      )}
+
+      <Tabs
+        value={aba}
+        onChange={setAba}
+        className="mb-5"
+        items={[
+          { id: 'projetos', label: 'Projetos (Kanban)' },
+          { id: 'pendencias', label: 'Pendências' },
+        ]}
+      />
 
       {aba === 'projetos' && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -147,7 +197,21 @@ export default function ProjetosPage() {
             const c = cores[col.cor]
             const ColIcon = col.icon
             return (
-              <div key={col.id} className={`${c.bg} rounded-2xl border ${c.border} p-3 min-h-[400px]`}>
+              <div
+                key={col.id}
+                onDragOver={e => {
+                  if (!podeGerenciar) return
+                  e.preventDefault()
+                }}
+                onDrop={async e => {
+                  if (!podeGerenciar) return
+                  e.preventDefault()
+                  const projetoId = e.dataTransfer.getData('text/plain') || arrastandoId
+                  setArrastandoId(null)
+                  if (projetoId) await moverProjeto(projetoId, col.id)
+                }}
+                className={`${c.bg} rounded-2xl border ${c.border} p-3 min-h-[400px] transition-colors ${arrastandoId ? 'ring-1 ring-slate-300/70' : ''}`}
+              >
                 <div className="flex items-center justify-between mb-3 px-1">
                   <div className="flex items-center gap-2">
                     <span className={`w-2 h-2 rounded-full ${c.dot}`} />
@@ -160,7 +224,18 @@ export default function ProjetosPage() {
                   {items.length === 0 ? (
                     <div className="text-center text-xs text-slate-400 italic py-8">Vazio</div>
                   ) : items.map(p => (
-                    <div key={p.id} className="bg-white rounded-xl p-3 border border-slate-200 shadow-sm hover:shadow-md transition-all">
+                    <div
+                      key={p.id}
+                      draggable={podeGerenciar}
+                      onDragStart={e => {
+                        e.dataTransfer.setData('text/plain', p.id)
+                        e.dataTransfer.effectAllowed = 'move'
+                        setArrastandoId(p.id)
+                      }}
+                      onDragEnd={() => setArrastandoId(null)}
+                      onClick={() => setModalDetalhes(p)}
+                      className={`bg-white rounded-xl p-3 border border-slate-200 shadow-sm hover:shadow-md transition-all cursor-pointer ${arrastandoId === p.id ? 'opacity-60' : ''}`}
+                    >
                       <p className="text-sm font-semibold text-slate-900 mb-1.5">{p.nome}</p>
                       {p.descricao && <p className="text-xs text-slate-500 mb-2 line-clamp-2">{p.descricao}</p>}
                       <div className="space-y-1.5">
@@ -178,7 +253,10 @@ export default function ProjetosPage() {
                       </div>
                       {podeGerenciar && p.status !== 'concluido' && (
                         <button
-                          onClick={() => avancarStatus(p)}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            avancarStatus(p)
+                          }}
                           className={`w-full mt-3 text-xs font-medium ${c.text} hover:bg-white py-1.5 rounded-lg transition-colors`}
                         >
                           Avançar →
@@ -280,6 +358,83 @@ export default function ProjetosPage() {
 
           {erro && <div className="md:col-span-2 flex items-center gap-2 bg-rose-50 border border-rose-200 text-rose-700 text-sm px-3 py-2.5 rounded-lg"><AlertCircle size={15} />{erro}</div>}
         </form>
+      </Modal>
+
+      <Modal
+        aberto={!!modalDetalhes}
+        onFechar={() => setModalDetalhes(null)}
+        titulo={modalDetalhes?.nome ?? 'Detalhes do Projeto'}
+        descricao={modalDetalhes?.categoria || 'Projeto pedagógico'}
+        tamanho="lg"
+        footer={<Button variante="ghost" onClick={() => setModalDetalhes(null)}>Fechar</Button>}
+      >
+        {modalDetalhes && (
+          <div className="space-y-5">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">Status</p>
+                <Badge variante={COLUNAS.find(c => c.id === modalDetalhes.status)?.cor === 'emerald' ? 'green' : COLUNAS.find(c => c.id === modalDetalhes.status)?.cor === 'amber' ? 'yellow' : 'blue'}>
+                  {COLUNAS.find(c => c.id === modalDetalhes.status)?.label ?? modalDetalhes.status}
+                </Badge>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">Início</p>
+                <p className="text-sm font-semibold text-slate-800">{formatarData(modalDetalhes.data_inicio)}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">Fim previsto</p>
+                <p className="text-sm font-semibold text-slate-800">{formatarData(modalDetalhes.data_fim)}</p>
+              </div>
+            </div>
+
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Descrição</p>
+              <p className="text-sm text-slate-700 whitespace-pre-wrap">
+                {modalDetalhes.descricao || 'Sem descrição cadastrada.'}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-4">
+                <div className="flex items-center gap-2 mb-2 text-blue-700">
+                  <Flag size={16} />
+                  <p className="text-xs font-bold uppercase tracking-wider">Meta</p>
+                </div>
+                <p className="text-sm text-slate-700">{modalDetalhes.meta || 'Sem meta informada.'}</p>
+              </div>
+
+              <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-4">
+                <div className="flex items-center gap-2 mb-2 text-emerald-700">
+                  <BarChart3 size={16} />
+                  <p className="text-xs font-bold uppercase tracking-wider">Indicador</p>
+                </div>
+                <p className="text-sm text-slate-700">{modalDetalhes.indicador_sucesso || 'Sem indicador informado.'}</p>
+              </div>
+            </div>
+
+            {podeGerenciar && (
+              <div className="border-t border-slate-100 pt-4">
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Mover para</p>
+                <div className="flex flex-wrap gap-2">
+                  {COLUNAS.map(col => (
+                    <Button
+                      key={col.id}
+                      variante={modalDetalhes.status === col.id ? 'accent' : 'ghost'}
+                      tamanho="sm"
+                      disabled={modalDetalhes.status === col.id}
+                      onClick={async () => {
+                        await moverProjeto(modalDetalhes.id, col.id)
+                        setModalDetalhes(prev => prev ? { ...prev, status: col.id } : prev)
+                      }}
+                    >
+                      {col.label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </Modal>
 
       {/* Modal Nova Pendência */}

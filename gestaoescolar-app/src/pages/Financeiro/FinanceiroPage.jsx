@@ -25,6 +25,9 @@ import {
   Upload,
   Lock,
 } from 'lucide-react'
+import { Document, baixarPDF, slugify } from '../../utils/exportPDF'
+import { exportarParaExcel, formatarParaExportacao } from '../../utils/exportExcel'
+import { FinanceiroRelatorioDocumento } from './documentos/FinanceiroRelatorioDocumento'
 
 const ANO_ATUAL = new Date().getFullYear()
 const MES_ATUAL = new Date().getMonth() + 1
@@ -416,6 +419,40 @@ export default function FinanceiroPage() {
   const categoriasDistintas = [...new Set(lancamentos.map(l => l.categoria).filter(Boolean))]
   const centrosDistintos    = [...new Set(lancamentos.map(l => l.centro_custo).filter(Boolean))]
 
+  function linhasExportacao() {
+    return formatarParaExportacao(lancamentos, {
+      'Data': item => formatarData(item.data_lancamento),
+      'Tipo': 'tipo',
+      'Categoria': 'categoria',
+      'Subcategoria': 'subcategoria',
+      'Centro de custo': 'centro_custo',
+      'Valor': item => Number(item.valor ?? 0),
+      'Status': 'status',
+      'Descrição': 'descricao',
+      'Aprovado por': 'aprovado_por',
+    })
+  }
+
+  function exportarExcel() {
+    exportarParaExcel(linhasExportacao(), `financeiro-${filtroAno || ANO_ATUAL}`, 'Financeiro')
+  }
+
+  async function exportarPDF() {
+    const documento = (
+      <Document>
+        <FinanceiroRelatorioDocumento
+          dados={{
+            lancamentos,
+            ano: filtroAno || ANO_ATUAL,
+            totais: { orcamentoPrevisto, totalExecutado, saldoDisponivel },
+            dataGeracao: new Date().toLocaleString('pt-BR'),
+          }}
+        />
+      </Document>
+    )
+    await baixarPDF(documento, `financeiro-${slugify(filtroAno || ANO_ATUAL)}.pdf`)
+  }
+
   return (
     <div className="p-6 space-y-5">
       {/* ── Header ─────────────────────────────────────────────────────────── */}
@@ -427,8 +464,19 @@ export default function FinanceiroPage() {
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <button className="flex items-center gap-2 text-sm border border-slate-200 bg-white text-slate-600 px-4 py-2 rounded-lg hover:bg-slate-50 transition-colors shadow-sm">
-            <Download size={15} /> Exportar
+          <button
+            onClick={exportarExcel}
+            disabled={lancamentos.length === 0}
+            className="flex items-center gap-2 text-sm border border-slate-200 bg-white text-slate-600 px-4 py-2 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+          >
+            <Download size={15} /> Excel
+          </button>
+          <button
+            onClick={exportarPDF}
+            disabled={lancamentos.length === 0}
+            className="flex items-center gap-2 text-sm border border-slate-200 bg-white text-slate-600 px-4 py-2 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+          >
+            <FileText size={15} /> PDF
           </button>
           {podeCriar && (
             <>

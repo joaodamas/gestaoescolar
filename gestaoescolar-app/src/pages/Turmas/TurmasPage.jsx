@@ -95,6 +95,9 @@ export default function TurmasPage() {
   }
 
   function abrirModalEditar(turma) {
+    const professoresIds = turma.professores_ids?.length
+      ? turma.professores_ids
+      : (turma.professor_id ? [turma.professor_id] : [])
     setEditando(turma.id)
     setForm({
       nome: turma.nome ?? '',
@@ -102,8 +105,8 @@ export default function TurmasPage() {
       turno: turma.turno ?? 'manha',
       sala: turma.sala ?? '',
       capacidade_max: turma.capacidade_max ?? 35,
-      professor_id: turma.professor_id ?? '',
-      professores_ids: turma.professores_ids ?? [],
+      professor_id: turma.professor_id ?? professoresIds[0] ?? '',
+      professores_ids: professoresIds,
       ano_letivo: turma.ano_letivo ?? ANO_LETIVO,
     })
     setErro('')
@@ -124,7 +127,7 @@ export default function TurmasPage() {
         sala: form.sala.trim(),
         capacidade_max: Number(form.capacidade_max),
         ano_letivo: Number(form.ano_letivo),
-        professor_id: form.professor_id || null,
+        professor_id: form.professores_ids[0] ?? null,
         professores_ids: form.professores_ids,
       }
       if (editando) {
@@ -144,6 +147,19 @@ export default function TurmasPage() {
   async function handleArquivar(turma) {
     if (!confirm(`Arquivar turma "${turma.nome}"?\n\nA turma não será deletada — apenas marcada como inativa (soft delete).`)) return
     await arquivarTurma(turma.id)
+  }
+
+  function alternarProfessor(professorId) {
+    setForm(f => {
+      const selecionados = f.professores_ids.includes(professorId)
+        ? f.professores_ids.filter(id => id !== professorId)
+        : [...f.professores_ids, professorId]
+      return {
+        ...f,
+        professores_ids: selecionados,
+        professor_id: selecionados[0] ?? '',
+      }
+    })
   }
 
   const turmasFiltradas = turmas.filter(t => {
@@ -221,7 +237,10 @@ export default function TurmasPage() {
             const turno = TURNO_CONFIG[turma.turno] ?? TURNO_CONFIG.manha
             const TurnoIcon = turno.icon
             const ocupacao = (alunosCount[turma.id] ?? 0) / (turma.capacidade_max ?? 1) * 100
-            const professor = professores.find(p => p.id === turma.professor_id)
+            const professoresIds = turma.professores_ids?.length
+              ? turma.professores_ids
+              : (turma.professor_id ? [turma.professor_id] : [])
+            const professoresTurma = professoresIds.map(id => professores.find(p => p.id === id)).filter(Boolean)
             const inativa = !turma.ativa
 
             return (
@@ -288,10 +307,12 @@ export default function TurmasPage() {
                       </div>
                     )}
 
-                    {professor && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-500">Prof. titular</span>
-                        <span className="font-medium text-slate-700 truncate ml-2 text-right">{professor.nome}</span>
+                    {professoresTurma.length > 0 && (
+                      <div className="flex items-start justify-between gap-3">
+                        <span className="text-slate-500">Professores</span>
+                        <span className="font-medium text-slate-700 text-right">
+                          {professoresTurma.map(p => p.nome).join(', ')}
+                        </span>
                       </div>
                     )}
                   </div>
@@ -376,14 +397,33 @@ export default function TurmasPage() {
             />
           </div>
 
-          <Select
-            label="Professor(a) Titular"
-            value={form.professor_id}
-            onChange={e => setForm(f => ({ ...f, professor_id: e.target.value }))}
-          >
-            <option value="">Nenhum (definir depois)</option>
-            {professores.map(p => <option key={p.id} value={p.id}>{p.nome} — {p.email}</option>)}
-          </Select>
+          <div>
+            <p className="block text-xs font-medium text-slate-600 mb-1.5">Professores vinculados</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 rounded-xl border border-slate-200 p-3 max-h-48 overflow-y-auto">
+              {professores.length === 0 ? (
+                <p className="text-xs text-slate-400 md:col-span-2">Nenhum professor ativo cadastrado.</p>
+              ) : professores.map(p => {
+                const selecionado = form.professores_ids.includes(p.id)
+                return (
+                  <label key={p.id} className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm cursor-pointer transition-colors ${
+                    selecionado ? 'border-blue-200 bg-blue-50 text-blue-800' : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                  }`}>
+                    <input
+                      type="checkbox"
+                      checked={selecionado}
+                      onChange={() => alternarProfessor(p.id)}
+                      className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="min-w-0">
+                      <span className="block font-medium truncate">{p.nome}</span>
+                      <span className="block text-xs text-slate-500 truncate">{p.email}</span>
+                    </span>
+                  </label>
+                )
+              })}
+            </div>
+            <p className="text-[11px] text-slate-400 mt-1">O primeiro selecionado fica como titular para compatibilidade com registros antigos.</p>
+          </div>
 
           <Input
             label="Ano Letivo"

@@ -1,20 +1,23 @@
 import { useEffect, useState } from 'react'
 import { collection, query, where, orderBy, onSnapshot, getDocs, addDoc, serverTimestamp } from 'firebase/firestore'
-import { db } from '../../firebase/firebase'
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
+import { db, storage } from '../../firebase/firebase'
 import { useAuth } from '../../context/AuthContext'
-import { criarAluno } from '../../services/alunos'
-import { criarMatricula } from '../../services/matriculas'
+import { criarAluno, atualizarAluno } from '../../services/alunos'
+import { criarMatricula, atualizarMatricula } from '../../services/matriculas'
+import { listarResponsaveis, criarResponsavel, atualizarResponsavel } from '../../services/responsaveis'
 import { listarTurmas } from '../../services/turmas'
 import { mascararCPF, formatarCPF, formatarTelefone } from '../../utils/mascaramento'
 import { consultarCEP, formatarCEP } from '../../utils/cep'
+import { exportarParaExcel, formatarParaExportacao } from '../../utils/exportExcel'
 import {
   Search, Plus, ChevronRight, User, Users, AlertCircle, Download,
-  CheckCircle2, ShieldCheck, MapPin, Loader2
+  CheckCircle2, ShieldCheck, MapPin, Loader2, Camera, Upload, Edit3
 } from 'lucide-react'
 import PageHeader from '../../components/ui/PageHeader'
 import { Card, Badge, EmptyState, Spinner } from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
-import { Input, Select } from '../../components/ui/Input'
+import { Input, Select, Textarea } from '../../components/ui/Input'
 import Modal from '../../components/ui/Modal'
 import PerfilAlunoModal from './PerfilAlunoModal'
 
@@ -38,6 +41,8 @@ export default function AlunosPage() {
   const [filtroStatus, setFiltroStatus] = useState('ativo')
   const [carregando, setCarregando] = useState(true)
   const [drawerAberto, setDrawerAberto] = useState(false)
+  const [editandoAluno, setEditandoAluno] = useState(null)
+  const [editandoResponsavelId, setEditandoResponsavelId] = useState(null)
   const [alunoPerfilAberto, setAlunoPerfilAberto] = useState(null)
   const [form, setForm] = useState(formInicial())
   const [abaAtiva, setAbaAtiva] = useState('aluno')
@@ -49,6 +54,18 @@ export default function AlunosPage() {
   function formInicial() {
     return {
       nome_completo: '', data_nascimento: '', cpf: '', ra: '', sexo: '',
+      status: 'ativo',
+      foto_url: '', foto_arquivo: null,
+      tem_deficiencia: false, deficiencia_descricao: '',
+      tem_doenca: false, doencas: '',
+      tem_alergia: false, alergias: '',
+      alergias_alimentares: '',
+      restricoes_alimentares: '',
+      medicamentos_continuos: '',
+      plano_saude: '',
+      observacoes_saude: '',
+      contato_emergencia_nome: '',
+      contato_emergencia_telefone: '',
       necessidades_especiais: '', turma_id: '', ano_letivo: ANO_LETIVO,
       // Endereço (com auto-preenchimento via CEP)
       cep: '', logradouro: '', numero: '', complemento: '',
@@ -81,7 +98,7 @@ export default function AlunosPage() {
               where('status', '==', 'ativa')
             )
             const mSnap = await getDocs(mq)
-            if (!mSnap.empty) mMap[aluno.id] = mSnap.docs[0].data()
+            if (!mSnap.empty) mMap[aluno.id] = { id: mSnap.docs[0].id, ...mSnap.docs[0].data() }
           } catch (e) {
             console.warn('matricula query falhou para', aluno.id, e.message)
           }
@@ -114,6 +131,132 @@ export default function AlunosPage() {
     return turmas.find(t => t.id === mat.turma_id)?.nome ?? '—'
   }
 
+  function exportarLista() {
+    const linhas = formatarParaExportacao(alunosFiltrados, {
+      'Nome': 'nome_completo',
+      'RA': 'ra',
+      'CPF': aluno => mascararCPF(aluno.cpf),
+      'Matrícula': aluno => matriculasMap[aluno.id]?.numero_matricula ?? '',
+      'Turma': aluno => nomeTurma(aluno.id),
+      'Status': aluno => STATUS_BADGE[aluno.status]?.label ?? aluno.status ?? '',
+      'Data de nascimento': 'data_nascimento',
+      'Cidade': 'endereco.cidade',
+      'UF': 'endereco.uf',
+    })
+    exportarParaExcel(linhas, `alunos-${filtroStatus}-${ANO_LETIVO}`, 'Alunos')
+  }
+
+  function abrirNovaMatricula() {
+    setEditandoAluno(null)
+    setEditandoResponsavelId(null)
+    setForm(formInicial())
+    setAbaAtiva('aluno')
+    setErroForm('')
+    setDrawerAberto(true)
+  }
+
+  async function abrirEditarAluno(aluno) {
+    const saude = aluno.saude ?? {}
+    const endereco = aluno.endereco ?? {}
+    const responsaveis = await listarResponsaveis(aluno.id).catch(() => [])
+    const responsavel = responsaveis[0] ?? null
+    setEditandoAluno(aluno)
+    setEditandoResponsavelId(responsavel?.id ?? null)
+    setForm({
+      ...formInicial(),
+      nome_completo: aluno.nome_completo ?? '',
+      data_nascimento: aluno.data_nascimento ?? '',
+      cpf: aluno.cpf ? formatarCPF(aluno.cpf) : '',
+      ra: aluno.ra ?? '',
+      sexo: aluno.sexo ?? '',
+      status: aluno.status ?? 'ativo',
+      foto_url: aluno.foto_url ?? '',
+      foto_arquivo: null,
+      necessidades_especiais: aluno.necessidades_especiais ?? saude.deficiencia_descricao ?? '',
+      tem_deficiencia: !!saude.tem_deficiencia,
+      deficiencia_descricao: saude.deficiencia_descricao ?? aluno.necessidades_especiais ?? '',
+      tem_doenca: !!saude.tem_doenca,
+      doencas: saude.doencas ?? '',
+      tem_alergia: !!saude.tem_alergia,
+      alergias: saude.alergias ?? '',
+      alergias_alimentares: saude.alergias_alimentares ?? '',
+      restricoes_alimentares: saude.restricoes_alimentares ?? '',
+      medicamentos_continuos: saude.medicamentos_continuos ?? '',
+      plano_saude: saude.plano_saude ?? '',
+      observacoes_saude: saude.observacoes_saude ?? '',
+      contato_emergencia_nome: saude.contato_emergencia_nome ?? '',
+      contato_emergencia_telefone: saude.contato_emergencia_telefone ? formatarTelefone(saude.contato_emergencia_telefone) : '',
+      cep: endereco.cep ? formatarCEP(endereco.cep) : '',
+      logradouro: endereco.logradouro ?? '',
+      numero: endereco.numero ?? '',
+      complemento: endereco.complemento ?? '',
+      bairro: endereco.bairro ?? '',
+      cidade: endereco.cidade ?? '',
+      uf: endereco.uf ?? '',
+      turma_id: matriculasMap[aluno.id]?.turma_id ?? '',
+      ano_letivo: matriculasMap[aluno.id]?.ano_letivo ?? ANO_LETIVO,
+      resp_nome: responsavel?.nome ?? '',
+      resp_parentesco: responsavel?.parentesco ?? 'mae',
+      resp_telefone: responsavel?.telefone ? formatarTelefone(responsavel.telefone) : '',
+      resp_email: responsavel?.email ?? '',
+      resp_financeiro: responsavel?.responsavel_financeiro ?? true,
+      resp_pedagogico: responsavel?.responsavel_pedagogico ?? true,
+      resp_consentimento: responsavel?.consentimento_lgpd ?? true,
+    })
+    setAbaAtiva('aluno')
+    setErroForm('')
+    setDrawerAberto(true)
+  }
+
+  async function resolverFotoUrl() {
+    let fotoUrl = form.foto_url.trim()
+    if (form.foto_arquivo) {
+      const ext = form.foto_arquivo.name.split('.').pop()?.toLowerCase() || 'jpg'
+      const nomeSeguro = `${Date.now()}-${form.nome_completo.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.${ext}`
+      const fotoRef = ref(storage, `alunos/fotos/${nomeSeguro}`)
+      const upload = await uploadBytes(fotoRef, form.foto_arquivo)
+      fotoUrl = await getDownloadURL(upload.ref)
+    }
+    return fotoUrl
+  }
+
+  function montarDadosAluno(fotoUrl) {
+    return {
+      nome_completo: form.nome_completo.trim(),
+      data_nascimento: form.data_nascimento,
+      cpf: form.cpf.replace(/\D/g, ''),
+      ra: form.ra.trim(),
+      sexo: form.sexo,
+      status: form.status,
+      necessidades_especiais: form.necessidades_especiais,
+      foto_url: fotoUrl,
+      saude: {
+        tem_deficiencia: form.tem_deficiencia,
+        deficiencia_descricao: form.deficiencia_descricao,
+        tem_doenca: form.tem_doenca,
+        doencas: form.doencas,
+        tem_alergia: form.tem_alergia,
+        alergias: form.alergias,
+        alergias_alimentares: form.alergias_alimentares,
+        restricoes_alimentares: form.restricoes_alimentares,
+        medicamentos_continuos: form.medicamentos_continuos,
+        plano_saude: form.plano_saude,
+        observacoes_saude: form.observacoes_saude,
+        contato_emergencia_nome: form.contato_emergencia_nome,
+        contato_emergencia_telefone: form.contato_emergencia_telefone.replace(/\D/g, ''),
+      },
+      endereco: {
+        cep: form.cep.replace(/\D/g, ''),
+        logradouro: form.logradouro,
+        numero: form.numero,
+        complemento: form.complemento,
+        bairro: form.bairro,
+        cidade: form.cidade,
+        uf: form.uf,
+      },
+    }
+  }
+
   async function handleCepBlur() {
     const cepLimpo = form.cep.replace(/\D/g, '')
     if (cepLimpo.length !== 8) { setCepErro(''); return }
@@ -138,28 +281,14 @@ export default function AlunosPage() {
   async function salvarNovaMatricula(e) {
     e.preventDefault()
     setErroForm('')
+    if (!form.nome_completo.trim()) { setErroForm('Nome do aluno é obrigatório.'); return }
+    if (!form.data_nascimento) { setErroForm('Data de nascimento é obrigatória.'); return }
     if (!form.turma_id) { setErroForm('Selecione uma turma.'); return }
     if (!form.resp_consentimento) { setErroForm('Consentimento LGPD obrigatório.'); return }
     setSalvando(true)
     try {
-      const alunoRef = await criarAluno({
-        nome_completo: form.nome_completo,
-        data_nascimento: form.data_nascimento,
-        cpf: form.cpf.replace(/\D/g, ''),
-        ra: form.ra.trim(),
-        sexo: form.sexo,
-        necessidades_especiais: form.necessidades_especiais,
-        foto_url: '',
-        endereco: {
-          cep: form.cep.replace(/\D/g, ''),
-          logradouro: form.logradouro,
-          numero: form.numero,
-          complemento: form.complemento,
-          bairro: form.bairro,
-          cidade: form.cidade,
-          uf: form.uf,
-        },
-      }, user.uid, form.resp_consentimento)
+      const fotoUrl = await resolverFotoUrl()
+      const alunoRef = await criarAluno(montarDadosAluno(fotoUrl), user.uid, form.resp_consentimento)
 
       await addDoc(collection(db, 'responsaveis'), {
         aluno_id: alunoRef.id,
@@ -188,6 +317,55 @@ export default function AlunosPage() {
     }
   }
 
+  async function salvarEdicaoAluno(e) {
+    e?.preventDefault?.()
+    if (!editandoAluno) return
+    setErroForm('')
+    if (!form.nome_completo.trim()) { setErroForm('Nome do aluno é obrigatório.'); return }
+    if (!form.data_nascimento) { setErroForm('Data de nascimento é obrigatória.'); return }
+    setSalvando(true)
+    try {
+      const fotoUrl = await resolverFotoUrl()
+      await atualizarAluno(editandoAluno.id, montarDadosAluno(fotoUrl))
+
+      const matriculaAtual = matriculasMap[editandoAluno.id]
+      if (matriculaAtual?.id) {
+        await atualizarMatricula(matriculaAtual.id, {
+          turma_id: form.turma_id,
+          ano_letivo: Number(form.ano_letivo) || ANO_LETIVO,
+        })
+      }
+
+      const dadosResponsavel = {
+        aluno_id: editandoAluno.id,
+        nome: form.resp_nome.trim(),
+        parentesco: form.resp_parentesco,
+        cpf: '',
+        telefone: form.resp_telefone.replace(/\D/g, ''),
+        email: form.resp_email.trim().toLowerCase(),
+        responsavel_financeiro: form.resp_financeiro,
+        responsavel_pedagogico: form.resp_pedagogico,
+        consentimento_lgpd: form.resp_consentimento,
+      }
+      if (editandoResponsavelId) {
+        await atualizarResponsavel(editandoResponsavelId, dadosResponsavel)
+      } else if (dadosResponsavel.nome) {
+        await criarResponsavel(dadosResponsavel)
+      }
+
+      setDrawerAberto(false)
+      setEditandoAluno(null)
+      setEditandoResponsavelId(null)
+      setForm(formInicial())
+      setAbaAtiva('aluno')
+    } catch (err) {
+      setErroForm('Erro ao atualizar cadastro. Tente novamente.')
+      console.error(err)
+    } finally {
+      setSalvando(false)
+    }
+  }
+
   return (
     <div>
       <PageHeader
@@ -196,8 +374,15 @@ export default function AlunosPage() {
         icon={Users}
         acoes={
           <>
-            <Button variante="secondary" icon={Download}>Exportar</Button>
-            <Button variante="accent" icon={Plus} onClick={() => setDrawerAberto(true)}>
+            <Button
+              variante="secondary"
+              icon={Download}
+              onClick={exportarLista}
+              disabled={alunosFiltrados.length === 0}
+            >
+              Exportar
+            </Button>
+            <Button variante="accent" icon={Plus} onClick={abrirNovaMatricula}>
               Nova Matrícula
             </Button>
           </>
@@ -248,7 +433,7 @@ export default function AlunosPage() {
             icon={Users}
             titulo="Nenhum aluno encontrado"
             descricao={busca || filtroTurma ? 'Tente ajustar os filtros de busca.' : 'Comece criando uma nova matrícula.'}
-            acao={!busca && !filtroTurma ? <Button variante="accent" icon={Plus} onClick={() => setDrawerAberto(true)}>Nova Matrícula</Button> : null}
+            acao={!busca && !filtroTurma ? <Button variante="accent" icon={Plus} onClick={abrirNovaMatricula}>Nova Matrícula</Button> : null}
           />
         ) : (
           <div className="overflow-x-auto">
@@ -259,7 +444,7 @@ export default function AlunosPage() {
                   <th className="text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider px-4 py-3">Matrícula</th>
                   <th className="text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider px-4 py-3">Turma</th>
                   <th className="text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider px-4 py-3">Status</th>
-                  <th className="px-4 py-3" />
+                  <th className="text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider px-4 py-3">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -292,7 +477,30 @@ export default function AlunosPage() {
                         <Badge variante={badge.variante}>{badge.label}</Badge>
                       </td>
                       <td className="px-4 py-3.5 text-right">
-                        <ChevronRight size={16} className="text-slate-300 group-hover:text-blue-600 transition-colors inline" />
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            variante="ghost"
+                            tamanho="sm"
+                            icon={Edit3}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              abrirEditarAluno(aluno)
+                            }}
+                          >
+                            Editar
+                          </Button>
+                          <Button
+                            variante="ghost"
+                            tamanho="sm"
+                            icon={ChevronRight}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setAlunoPerfilAberto(aluno)
+                            }}
+                          >
+                            Ver Perfil
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   )
@@ -303,24 +511,44 @@ export default function AlunosPage() {
         )}
       </Card>
 
-      {/* Modal Nova Matrícula */}
+      {/* Modal Nova Matrícula / Edição de Cadastro */}
       <Modal
         aberto={drawerAberto}
-        onFechar={() => setDrawerAberto(false)}
-        titulo="Nova Matrícula"
-        descricao="Cadastre o aluno e o responsável legal."
+        onFechar={() => {
+          setDrawerAberto(false)
+          setEditandoAluno(null)
+          setEditandoResponsavelId(null)
+          setForm(formInicial())
+          setAbaAtiva('aluno')
+        }}
+        titulo={editandoAluno ? 'Editar Cadastro do Aluno' : 'Nova Matrícula'}
+        descricao={editandoAluno ? 'Atualize os dados pessoais, saúde e endereço do aluno.' : 'Cadastre o aluno e o responsável legal.'}
         tamanho="xl"
         footer={
           <>
-            <Button variante="ghost" onClick={() => setDrawerAberto(false)}>Cancelar</Button>
+            <Button variante="ghost" onClick={() => {
+              setDrawerAberto(false)
+              setEditandoAluno(null)
+              setEditandoResponsavelId(null)
+              setForm(formInicial())
+              setAbaAtiva('aluno')
+            }}>Cancelar</Button>
             {abaAtiva === 'aluno' && (
-              <Button variante="accent" onClick={() => setAbaAtiva('endereco')}>
-                Próximo: Endereço
+              <Button variante="accent" onClick={() => setAbaAtiva('saude')}>
+                Próximo: Saúde
               </Button>
+            )}
+            {abaAtiva === 'saude' && (
+              <>
+                <Button variante="secondary" onClick={() => setAbaAtiva('aluno')}>← Voltar</Button>
+                <Button variante="accent" onClick={() => setAbaAtiva('endereco')}>
+                  Próximo: Endereço
+                </Button>
+              </>
             )}
             {abaAtiva === 'endereco' && (
               <>
-                <Button variante="secondary" onClick={() => setAbaAtiva('aluno')}>← Voltar</Button>
+                <Button variante="secondary" onClick={() => setAbaAtiva('saude')}>← Voltar</Button>
                 <Button variante="accent" onClick={() => setAbaAtiva('responsavel')}>
                   Próximo: Responsável
                 </Button>
@@ -329,8 +557,8 @@ export default function AlunosPage() {
             {abaAtiva === 'responsavel' && (
               <>
                 <Button variante="secondary" onClick={() => setAbaAtiva('endereco')}>← Voltar</Button>
-                <Button variante="accent" loading={salvando} onClick={salvarNovaMatricula}>
-                  Confirmar Matrícula
+                <Button variante="accent" loading={salvando} onClick={editandoAluno ? salvarEdicaoAluno : salvarNovaMatricula}>
+                  {editandoAluno ? 'Salvar Alterações' : 'Confirmar Matrícula'}
                 </Button>
               </>
             )}
@@ -341,8 +569,9 @@ export default function AlunosPage() {
         <div className="flex items-center gap-2 mb-6">
           {[
             { id: 'aluno',       label: 'Dados do Aluno', num: 1 },
-            { id: 'endereco',    label: 'Endereço',       num: 2 },
-            { id: 'responsavel', label: 'Responsável',    num: 3 },
+            { id: 'saude',       label: 'Saúde',          num: 2 },
+            { id: 'endereco',    label: 'Endereço',       num: 3 },
+            { id: 'responsavel', label: 'Responsável',    num: 4 },
           ].map((step, i, arr) => (
             <div key={step.id} className="flex items-center flex-1">
               <button
@@ -368,6 +597,49 @@ export default function AlunosPage() {
 
         {abaAtiva === 'aluno' && (
           <form className="space-y-4">
+            <div className="flex items-start gap-4">
+              <div className="w-24 h-24 rounded-2xl bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center shrink-0">
+                {form.foto_url ? (
+                  <img src={form.foto_url} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <Camera size={24} className="text-slate-400" />
+                )}
+              </div>
+              <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
+                <Input
+                  label="URL da Foto"
+                  value={form.foto_url}
+                  onChange={e => setForm(f => ({ ...f, foto_url: e.target.value }))}
+                  placeholder="https://..."
+                  hint="Opcional; também pode selecionar um arquivo."
+                />
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5 tracking-wide uppercase">
+                    Arquivo da Foto
+                  </label>
+                  <label className="h-10 px-3 text-sm rounded-lg bg-white border border-slate-200 hover:bg-slate-50 flex items-center gap-2 cursor-pointer">
+                    <Upload size={15} className="text-slate-500" />
+                    <span className="truncate text-slate-600">
+                      {form.foto_arquivo?.name || 'Selecionar imagem'}
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={e => {
+                        const arquivo = e.target.files?.[0] ?? null
+                        setForm(f => ({
+                          ...f,
+                          foto_arquivo: arquivo,
+                          foto_url: arquivo ? URL.createObjectURL(arquivo) : f.foto_url,
+                        }))
+                      }}
+                    />
+                  </label>
+                </div>
+              </div>
+            </div>
+
             <Input
               label="Nome Completo *"
               required
@@ -420,7 +692,20 @@ export default function AlunosPage() {
             />
             <div className="grid grid-cols-2 gap-3">
               <Select
-                label="Turma *"
+                label="Status"
+                value={form.status}
+                onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
+              >
+                <option value="ativo">Ativo</option>
+                <option value="inativo">Inativo</option>
+                <option value="transferido">Transferido</option>
+                <option value="formado">Formado</option>
+              </Select>
+              <div />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Select
+                label={editandoAluno ? 'Turma Atual *' : 'Turma *'}
                 required
                 value={form.turma_id}
                 onChange={e => setForm(f => ({ ...f, turma_id: e.target.value }))}
@@ -436,6 +721,108 @@ export default function AlunosPage() {
                 onChange={e => setForm(f => ({ ...f, ano_letivo: Number(e.target.value) }))}
               />
             </div>
+          </form>
+        )}
+
+        {abaAtiva === 'saude' && (
+          <form className="space-y-4">
+            <div className="bg-rose-50/60 border border-rose-100 rounded-xl p-4">
+              <p className="text-xs font-bold text-rose-900 mb-1">Informações de saúde e acessibilidade</p>
+              <p className="text-xs text-rose-700">Esses dados ajudam a equipe em emergências, alimentação, inclusão e acompanhamento pedagógico.</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <label className="flex items-center gap-2 text-sm text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-2.5 cursor-pointer">
+                <input type="checkbox" checked={form.tem_deficiencia} onChange={e => setForm(f => ({ ...f, tem_deficiencia: e.target.checked }))} className="w-4 h-4 accent-blue-600" />
+                Tem deficiência
+              </label>
+              <label className="flex items-center gap-2 text-sm text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-2.5 cursor-pointer">
+                <input type="checkbox" checked={form.tem_doenca} onChange={e => setForm(f => ({ ...f, tem_doenca: e.target.checked }))} className="w-4 h-4 accent-blue-600" />
+                Tem doença/condição
+              </label>
+              <label className="flex items-center gap-2 text-sm text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-2.5 cursor-pointer">
+                <input type="checkbox" checked={form.tem_alergia} onChange={e => setForm(f => ({ ...f, tem_alergia: e.target.checked }))} className="w-4 h-4 accent-blue-600" />
+                Tem alergia
+              </label>
+            </div>
+
+            <Textarea
+              label="Deficiência / Necessidades de Acessibilidade"
+              value={form.deficiencia_descricao}
+              onChange={e => setForm(f => ({ ...f, deficiencia_descricao: e.target.value, necessidades_especiais: e.target.value }))}
+              placeholder="Ex: baixa visão, deficiência auditiva, TEA, mobilidade reduzida, adaptações necessárias..."
+              rows={3}
+            />
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Textarea
+                label="Doenças ou Condições"
+                value={form.doencas}
+                onChange={e => setForm(f => ({ ...f, doencas: e.target.value }))}
+                placeholder="Ex: asma, diabetes, epilepsia..."
+                rows={3}
+              />
+              <Textarea
+                label="Alergias"
+                value={form.alergias}
+                onChange={e => setForm(f => ({ ...f, alergias: e.target.value }))}
+                placeholder="Ex: medicamentos, insetos, poeira..."
+                rows={3}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Input
+                label="Alergias Alimentares"
+                value={form.alergias_alimentares}
+                onChange={e => setForm(f => ({ ...f, alergias_alimentares: e.target.value }))}
+                placeholder="Ex: leite, ovo, amendoim..."
+              />
+              <Input
+                label="Restrições Alimentares"
+                value={form.restricoes_alimentares}
+                onChange={e => setForm(f => ({ ...f, restricoes_alimentares: e.target.value }))}
+                placeholder="Ex: intolerância à lactose, dieta especial..."
+              />
+            </div>
+
+            <Textarea
+              label="Medicamentos Contínuos"
+              value={form.medicamentos_continuos}
+              onChange={e => setForm(f => ({ ...f, medicamentos_continuos: e.target.value }))}
+              placeholder="Nome, dose e horários, se informado pelo responsável."
+              rows={2}
+            />
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <Input
+                label="Plano de Saúde"
+                value={form.plano_saude}
+                onChange={e => setForm(f => ({ ...f, plano_saude: e.target.value }))}
+                placeholder="Opcional"
+              />
+              <Input
+                label="Contato Emergência"
+                value={form.contato_emergencia_nome}
+                onChange={e => setForm(f => ({ ...f, contato_emergencia_nome: e.target.value }))}
+                placeholder="Nome"
+              />
+              <Input
+                label="Telefone Emergência"
+                value={form.contato_emergencia_telefone}
+                maxLength={15}
+                onChange={e => setForm(f => ({ ...f, contato_emergencia_telefone: formatarTelefone(e.target.value) }))}
+                placeholder="(00) 00000-0000"
+              />
+            </div>
+
+            <Textarea
+              label="Observações Gerais"
+              value={form.observacoes_saude}
+              onChange={e => setForm(f => ({ ...f, observacoes_saude: e.target.value }))}
+              placeholder="Orientações importantes para a equipe escolar."
+              rows={3}
+            />
           </form>
         )}
 

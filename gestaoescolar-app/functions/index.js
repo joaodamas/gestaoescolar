@@ -39,6 +39,29 @@ async function criarNotificacao({ destinatarioId, tipo, titulo, mensagem, refere
   })
 }
 
+function dataEhDiaUtil(data) {
+  if (!data) return false
+  const dia = new Date(`${data}T00:00:00`).getDay()
+  return dia !== 0 && dia !== 6
+}
+
+async function carregarCalendarioPorData(anoLetivo) {
+  const snap = await db.collection('calendario')
+    .where('ano_letivo', '==', anoLetivo)
+    .get()
+  return snap.docs.reduce((acc, doc) => {
+    const ev = doc.data()
+    if (ev.data) acc[ev.data] = ev
+    return acc
+  }, {})
+}
+
+function ehDiaLetivo(data, eventosPorData) {
+  const evento = eventosPorData[data]
+  if (evento) return evento.tipo !== 'feriado' && evento.tipo !== 'recesso'
+  return dataEhDiaUtil(data)
+}
+
 // ── recalcularIndicadores — Callable + Scheduled ────────────────────────────
 async function recalcular(ano) {
   const anoLetivo = ano ?? ANO_ATUAL
@@ -51,12 +74,18 @@ async function recalcular(ano) {
   const usuariosSnap = await db.collection('usuarios').where('ativo', '==', true).get()
   const totalColaboradores = usuariosSnap.size
 
-  // 3. Presenças — breakdown completo
+  // 3. Presenças — breakdown completo, apenas dias letivos do ano
+  const calendarioPorData = await carregarCalendarioPorData(anoLetivo)
   const presencasSnap = await db.collection('presencas').get()
-  const totalPresencas = presencasSnap.size
+  let totalPresencas = 0
   let presentesCount = 0, ausentesCount = 0, justificadosCount = 0
   presencasSnap.docs.forEach(d => {
-    const st = d.data().status
+    const presenca = d.data()
+    const anoPresenca = presenca.ano_letivo ?? Number(presenca.data?.slice(0, 4))
+    if (anoPresenca !== anoLetivo || !ehDiaLetivo(presenca.data, calendarioPorData)) return
+
+    totalPresencas += 1
+    const st = presenca.status
     if (st === 'presente') presentesCount++
     else if (st === 'ausente') ausentesCount++
     else if (st === 'justificado') justificadosCount++
@@ -135,57 +164,132 @@ exports.recalcularIndicadoresCallable = onCall({ region: 'southamerica-east1' },
   return recalcular(req.data?.ano)
 })
 
+// ── auditarAcaoCallable — gravar em /auditoria a partir do frontend ────────
+// /auditoria tem regra `allow write: if false` — só Cloud Functions gravam.
+exports.auditarAcaoCallable = onCall({ region: 'southamerica-east1' }, async (req) => {
+  if (!req.auth) {
+    throw new Error('Usuário não autenticado.')
+  }
+  const {
+    usuarioId, perfil, acao, modulo, entidade, entidadeId,
+    valorAnterior, valorNovo, motivo,
+  } = req.data ?? {}
+
+  if (!acao || !modulo || !entidade) {
+    throw new Error('Campos obrigatórios ausentes: acao, modulo, entidade.')
+  }
+
+  const ip = req.rawRequest?.headers?.['x-forwarded-for']
+            ?? req.rawRequest?.ip
+            ?? null
+
+  // Perfil: usa o enviado pelo cliente, ou busca em /usuarios para garantir precisão
+  let perfilFinal = perfil ?? 'desconhecido'
+  if (!perfil) {
+    try {
+      const userDoc = await db.collection('usuarios').doc(req.auth.uid).get()
+      if (userDoc.exists) perfilFinal = userDoc.data().perfil ?? 'desconhecido'
+    } catch (err) {
+      console.warn('Falha ao buscar perfil para auditoria:', err?.message ?? err)
+    }
+  }
+
+  const ref = await db.collection('auditoria').add({
+    usuario_id: usuarioId ?? req.auth.uid,
+    perfil: perfilFinal,
+    acao,
+    modulo,
+    entidade,
+    entidade_id: entidadeId ?? '',
+    valor_anterior: valorAnterior ?? null,
+    valor_novo: valorNovo ?? null,
+    motivo: motivo ?? '',
+    ip,
+    created_at: admin.firestore.FieldValue.serverTimestamp(),
+  })
+
+  return { ok: true, id: ref.id }
+})
+
 exports.recalcularIndicadoresScheduled = onSchedule(
   { schedule: 'every 15 minutes', region: 'southamerica-east1' },
   async () => recalcular(ANO_ATUAL)
 )
 
+async function avaliarAlertaFaltas(presenca) {
+  if (presenca.status !== 'ausente') return
+
+  const { aluno_id, turma_id, ano_letivo } = presenca
+  const anoLetivo = ano_letivo ?? Number(presenca.data?.slice(0, 4)) ?? ANO_ATUAL
+  const calendarioPorData = await carregarCalendarioPorData(anoLetivo)
+
+  if (!ehDiaLetivo(presenca.data, calendarioPorData)) return
+
+  const diasCalendario = Object.values(calendarioPorData)
+  const diasLetivosCalendario = diasCalendario.filter(ev =>
+    ev.tipo === 'aula' || ev.tipo === 'reposicao'
+  ).length
+  const totalDiasLetivos = diasLetivosCalendario || 200
+
+  // Conta apenas faltas não justificadas em dias letivos do ano.
+  const faltasSnap = await db.collection('presencas')
+    .where('aluno_id', '==', aluno_id)
+    .get()
+  const totalFaltas = faltasSnap.docs.filter(doc => {
+    const falta = doc.data()
+    const anoFalta = falta.ano_letivo ?? Number(falta.data?.slice(0, 4))
+    return anoFalta === anoLetivo
+      && falta.status === 'ausente'
+      && ehDiaLetivo(falta.data, calendarioPorData)
+  }).length
+
+  const pctFaltas = totalFaltas / totalDiasLetivos
+  if (pctFaltas < 0.25) return
+
+  const coordSnap = await db.collection('usuarios')
+    .where('perfil', 'in', ['coordenador', 'diretor'])
+    .where('ativo', '==', true)
+    .get()
+
+  const alunoSnap = await db.collection('alunos').doc(aluno_id).get()
+  const nomeAluno = alunoSnap.exists ? alunoSnap.data().nome_completo : 'Aluno'
+
+  await Promise.all(coordSnap.docs.map(async (u) => {
+    const idNotificacao = `alerta_faltas_${anoLetivo}_${aluno_id}_${u.id}`
+    const ref = db.collection('notificacoes').doc(idNotificacao)
+    const existente = await ref.get()
+    if (existente.exists) return
+
+    await ref.set({
+      destinatario_id: u.id,
+      tipo: 'alerta_faltas',
+      titulo: `⚠️ Alerta de faltas — ${nomeAluno}`,
+      mensagem: `${nomeAluno} atingiu ${Math.round(pctFaltas * 100)}% de faltas não justificadas (limite: 25%).`,
+      lida: false,
+      data_envio: admin.firestore.FieldValue.serverTimestamp(),
+      referencia_id: aluno_id,
+      referencia_modulo: 'chamada',
+      turma_id: turma_id ?? '',
+      ano_letivo: anoLetivo,
+    })
+  }))
+}
+
 // ── onPresencaSalva — detecta 25% de faltas ────────────────────────────────
 exports.onPresencaSalva = onDocumentCreated(
   { document: 'presencas/{id}', region: 'southamerica-east1' },
   async (event) => {
-    const presenca = event.data.data()
-    if (presenca.status !== 'ausente') return
+    await avaliarAlertaFaltas(event.data.data())
+  }
+)
 
-    const { aluno_id, turma_id, ano_letivo } = presenca
-    const anoLetivo = ano_letivo ?? ANO_ATUAL
-
-    // Conta total de dias letivos no calendário
-    const calSnap = await db.collection('calendario')
-      .where('tipo', '==', 'aula')
-      .where('ano_letivo', '==', anoLetivo)
-      .get()
-    const totalDiasLetivos = calSnap.size || 200 // fallback razoável
-
-    // Conta faltas do aluno no ano
-    const faltasSnap = await db.collection('presencas')
-      .where('aluno_id', '==', aluno_id)
-      .where('status', 'in', ['ausente'])
-      .get()
-    const totalFaltas = faltasSnap.size
-
-    const pctFaltas = totalFaltas / totalDiasLetivos
-    if (pctFaltas < 0.25) return
-
-    // Busca coordenadores para notificar
-    const coordSnap = await db.collection('usuarios')
-      .where('perfil', 'in', ['coordenador', 'diretor'])
-      .where('ativo', '==', true)
-      .get()
-
-    const alunoSnap = await db.collection('alunos').doc(aluno_id).get()
-    const nomeAluno = alunoSnap.exists ? alunoSnap.data().nome_completo : 'Aluno'
-
-    await Promise.all(coordSnap.docs.map(u =>
-      criarNotificacao({
-        destinatarioId: u.id,
-        tipo: 'alerta_faltas',
-        titulo: `⚠️ Alerta de faltas — ${nomeAluno}`,
-        mensagem: `${nomeAluno} atingiu ${Math.round(pctFaltas * 100)}% de faltas (limite: 25%).`,
-        referenciaId: aluno_id,
-        referenciaModulo: 'chamada',
-      })
-    ))
+exports.onPresencaAtualizada = onDocumentUpdated(
+  { document: 'presencas/{id}', region: 'southamerica-east1' },
+  async (event) => {
+    const antes = event.data.before.data()
+    const depois = event.data.after.data()
+    if (antes.status === depois.status && antes.data === depois.data) return
+    await avaliarAlertaFaltas(depois)
   }
 )
 
@@ -208,6 +312,37 @@ exports.onDespesaAprovada = onDocumentUpdated(
         valorNovo: { status: depois.status },
       })
     }
+  }
+)
+
+// ── onDespesaPendenteCriada — notifica Diretor para aprovação ──────────────
+exports.onDespesaPendenteCriada = onDocumentCreated(
+  { document: 'financeiro_lancamentos/{id}', region: 'southamerica-east1' },
+  async (event) => {
+    const lancamento = event.data.data()
+    if (lancamento.tipo !== 'despesa' || lancamento.status !== 'pendente') return
+
+    const diretorSnap = await db.collection('usuarios')
+      .where('perfil', '==', 'diretor')
+      .where('ativo', '==', true)
+      .get()
+
+    await Promise.all(diretorSnap.docs.map(async (diretor) => {
+      const ref = db.collection('notificacoes').doc(`despesa_pendente_${event.params.id}_${diretor.id}`)
+      const existente = await ref.get()
+      if (existente.exists) return
+
+      await ref.set({
+        destinatario_id: diretor.id,
+        tipo: 'despesa_pendente',
+        titulo: 'Despesa pendente de aprovação',
+        mensagem: `Despesa de R$ ${Number(lancamento.valor ?? 0).toFixed(2)} em ${lancamento.categoria || 'sem categoria'} aguarda aprovação.`,
+        lida: false,
+        data_envio: admin.firestore.FieldValue.serverTimestamp(),
+        referencia_id: event.params.id,
+        referencia_modulo: 'financeiro',
+      })
+    }))
   }
 )
 
@@ -241,6 +376,47 @@ exports.alertarPrazos = onSchedule(
         })
       }
       await pend.ref.update({ notificacao_enviada: true })
+    }))
+
+    const configSnap = await db.collection('configuracoes').doc('escola').get()
+    const diasPdde = Number(configSnap.exists ? configSnap.data().pdde_alerta_dias : 15) || 15
+    const prazoPdde = new Date(hoje)
+    prazoPdde.setDate(hoje.getDate() + diasPdde)
+    const prazoPddeStr = prazoPdde.toISOString().split('T')[0]
+
+    const pddeSnap = await db.collection('pendencias')
+      .where('tipo', '==', 'PDDE')
+      .get()
+
+    const destinatariosSnap = await db.collection('usuarios')
+      .where('perfil', 'in', ['diretor', 'admin'])
+      .where('ativo', '==', true)
+      .get()
+
+    await Promise.all(pddeSnap.docs.map(async (pend) => {
+      const dados = pend.data()
+      if (dados.pdde_notificacao_enviada) return
+      if (dados.status === 'concluido') return
+      if (!dados.data_prazo || dados.data_prazo < hojeStr || dados.data_prazo > prazoPddeStr) return
+
+      await Promise.all(destinatariosSnap.docs.map(async (u) => {
+        const ref = db.collection('notificacoes').doc(`pdde_prazo_${pend.id}_${u.id}`)
+        const existente = await ref.get()
+        if (existente.exists) return
+
+        await ref.set({
+          destinatario_id: u.id,
+          tipo: 'pdde_prazo',
+          titulo: 'Prazo PDDE se aproximando',
+          mensagem: `A pendência PDDE "${dados.titulo}" vence em ${dados.data_prazo}.`,
+          lida: false,
+          data_envio: admin.firestore.FieldValue.serverTimestamp(),
+          referencia_id: pend.id,
+          referencia_modulo: 'projetos',
+        })
+      }))
+
+      await pend.ref.update({ pdde_notificacao_enviada: true })
     }))
   }
 )
@@ -281,5 +457,54 @@ exports.onNotaAlteradaAposFechamento = onDocumentUpdated(
         })
       }
     }
+  }
+)
+
+// ── onOcorrenciaCriada — auditoria médica/acidente e alerta de gravidade ───
+exports.onOcorrenciaCriada = onDocumentCreated(
+  { document: 'ocorrencias/{id}', region: 'southamerica-east1' },
+  async (event) => {
+    const ocorrencia = event.data.data()
+    const tiposSensiveis = ['medico', 'acidente']
+
+    if (tiposSensiveis.includes(ocorrencia.tipo)) {
+      await auditarAcao({
+        usuarioId: ocorrencia.registrado_por,
+        acao: 'OCORRENCIA_SENSIVEL_CRIADA',
+        modulo: 'ocorrencias',
+        entidade: 'ocorrencias',
+        entidadeId: event.params.id,
+        valorNovo: {
+          tipo: ocorrencia.tipo,
+          aluno_id: ocorrencia.aluno_id,
+          gravidade: ocorrencia.gravidade,
+        },
+        motivo: 'Registro de ocorrência médica/acidente.',
+      })
+    }
+
+    if (ocorrencia.gravidade !== 'alta') return
+
+    const gestoresSnap = await db.collection('usuarios')
+      .where('perfil', 'in', ['diretor', 'coordenador'])
+      .where('ativo', '==', true)
+      .get()
+
+    await Promise.all(gestoresSnap.docs.map(async (u) => {
+      const ref = db.collection('notificacoes').doc(`ocorrencia_grave_${event.params.id}_${u.id}`)
+      const existente = await ref.get()
+      if (existente.exists) return
+
+      await ref.set({
+        destinatario_id: u.id,
+        tipo: 'ocorrencia_grave',
+        titulo: 'Ocorrência grave registrada',
+        mensagem: `${ocorrencia.aluno_nome || 'Aluno'} possui ocorrência de gravidade alta em acompanhamento.`,
+        lida: false,
+        data_envio: admin.firestore.FieldValue.serverTimestamp(),
+        referencia_id: event.params.id,
+        referencia_modulo: 'ocorrencias',
+      })
+    }))
   }
 )

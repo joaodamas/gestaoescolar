@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react'
+import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
 import { useAuth } from '../../context/AuthContext'
+import { storage } from '../../firebase/firebase'
 import { buscarConfiguracoes, salvarConfiguracoes } from '../../services/configuracoes'
 import {
   Settings, Save, Target, Sparkles, Building2, Wallet,
-  TrendingUp, BookCheck, GraduationCap, Plus, Trash2, CheckCircle2, AlertCircle
+  TrendingUp, BookCheck, GraduationCap, Plus, Trash2, CheckCircle2, AlertCircle,
+  Upload
 } from 'lucide-react'
 import PageHeader from '../../components/ui/PageHeader'
 import { Card, CardHeader, Spinner } from '../../components/ui/Card'
@@ -15,6 +18,7 @@ export default function ConfiguracoesPage() {
   const [config, setConfig] = useState(null)
   const [carregando, setCarregando] = useState(true)
   const [salvando, setSalvando] = useState(false)
+  const [logoFile, setLogoFile] = useState(null)
   const [sucesso, setSucesso] = useState(false)
   const [erro, setErro] = useState('')
 
@@ -29,6 +33,28 @@ export default function ConfiguracoesPage() {
 
   function atualizar(campo, valor) {
     setConfig(c => ({ ...c, [campo]: valor }))
+    setSucesso(false)
+  }
+
+  function atualizarRegraRecuperacao(campo, valor) {
+    setConfig(c => ({
+      ...c,
+      regras_recuperacao_final: {
+        ...(c.regras_recuperacao_final ?? {}),
+        [campo]: valor,
+      },
+    }))
+    setSucesso(false)
+  }
+
+  function atualizarEndereco(campo, valor) {
+    setConfig(c => ({
+      ...c,
+      endereco: {
+        ...(c.endereco ?? {}),
+        [campo]: valor,
+      },
+    }))
     setSucesso(false)
   }
 
@@ -69,6 +95,14 @@ export default function ConfiguracoesPage() {
     setSalvando(true)
     setErro('')
     try {
+      let logoUrl = config.logo_url ?? ''
+      if (logoFile) {
+        const extensao = logoFile.name.split('.').pop() || 'png'
+        const logoRef = ref(storage, `configuracoes/logo_escola.${extensao}`)
+        await uploadBytes(logoRef, logoFile)
+        logoUrl = await getDownloadURL(logoRef)
+      }
+
       // Converte saeb_historico para números no momento de salvar
       const saebNumerico = Object.fromEntries(
         Object.entries(config.saeb_historico ?? {})
@@ -79,8 +113,12 @@ export default function ConfiguracoesPage() {
         valores: (config.valores ?? []).filter(v => v?.trim()),
         saeb_historico: saebNumerico,
         meta_saeb: Number(config.meta_saeb) || 6.0,
+        logo_url: logoUrl,
+        pdde_alerta_dias: Number(config.pdde_alerta_dias) || 15,
       }
       await salvarConfiguracoes(limpo, user.uid)
+      setConfig(limpo)
+      setLogoFile(null)
       setSucesso(true)
       setTimeout(() => setSucesso(false), 3000)
     } catch (err) {
@@ -135,6 +173,45 @@ export default function ConfiguracoesPage() {
             <Input label="CNPJ" value={config.cnpj ?? ''} onChange={e => atualizar('cnpj', e.target.value)} disabled={!podeEditar} placeholder="00.000.000/0001-00" />
             <Input label="Slogan" value={config.slogan ?? ''} onChange={e => atualizar('slogan', e.target.value)} disabled={!podeEditar} className="md:col-span-2" />
             <Input label="Ano Letivo Atual" type="number" value={config.ano_letivo_atual ?? new Date().getFullYear()} onChange={e => atualizar('ano_letivo_atual', Number(e.target.value))} disabled={!podeEditar} />
+            <div className="md:col-span-2 flex flex-col md:flex-row md:items-center gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div className="w-20 h-20 rounded-xl bg-white border border-slate-200 flex items-center justify-center overflow-hidden shrink-0">
+                {config.logo_url ? (
+                  <img src={config.logo_url} alt="Logo da escola" className="w-full h-full object-contain p-2" />
+                ) : (
+                  <Building2 size={28} className="text-slate-300" />
+                )}
+              </div>
+              <div className="flex-1">
+                <p className="text-xs font-semibold text-slate-700 mb-2">LOGO DA ESCOLA</p>
+                <label className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                  podeEditar ? 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100 cursor-pointer' : 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed'
+                }`}>
+                  <Upload size={15} />
+                  {logoFile ? logoFile.name : 'Selecionar arquivo'}
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    disabled={!podeEditar}
+                    onChange={e => setLogoFile(e.target.files?.[0] ?? null)}
+                    className="hidden"
+                  />
+                </label>
+                <p className="text-xs text-slate-400 mt-2">PNG, JPG ou WEBP. O arquivo será salvo no Firebase Storage.</p>
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        <Card>
+          <CardHeader titulo="Endereço" descricao="Endereço completo da unidade escolar" />
+          <div className="p-5 grid grid-cols-1 md:grid-cols-6 gap-4">
+            <Input label="CEP" value={config.endereco?.cep ?? ''} onChange={e => atualizarEndereco('cep', e.target.value)} disabled={!podeEditar} placeholder="00000-000" />
+            <Input label="Rua" value={config.endereco?.rua ?? ''} onChange={e => atualizarEndereco('rua', e.target.value)} disabled={!podeEditar} className="md:col-span-3" />
+            <Input label="Número" value={config.endereco?.numero ?? ''} onChange={e => atualizarEndereco('numero', e.target.value)} disabled={!podeEditar} />
+            <Input label="Complemento" value={config.endereco?.complemento ?? ''} onChange={e => atualizarEndereco('complemento', e.target.value)} disabled={!podeEditar} />
+            <Input label="Bairro" value={config.endereco?.bairro ?? ''} onChange={e => atualizarEndereco('bairro', e.target.value)} disabled={!podeEditar} className="md:col-span-2" />
+            <Input label="Cidade" value={config.endereco?.cidade ?? ''} onChange={e => atualizarEndereco('cidade', e.target.value)} disabled={!podeEditar} className="md:col-span-3" />
+            <Input label="Estado" value={config.endereco?.estado ?? ''} onChange={e => atualizarEndereco('estado', e.target.value.toUpperCase().slice(0, 2))} disabled={!podeEditar} maxLength={2} />
           </div>
         </Card>
 
@@ -244,6 +321,65 @@ export default function ConfiguracoesPage() {
           </div>
         </Card>
 
+        <Card>
+          <CardHeader titulo="Regras de Recuperação Final" descricao="Usadas no cálculo de situação das notas" />
+          <div className="p-5 grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="flex items-center gap-3 p-3 bg-blue-50/50 rounded-xl border border-blue-100">
+              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center shrink-0">
+                <BookCheck size={18} className="text-blue-700" />
+              </div>
+              <div className="flex-1">
+                <p className="text-xs font-semibold text-blue-900 mb-1">MÉDIA PARA APROVAÇÃO</p>
+                <Input
+                  type="number"
+                  min={0}
+                  max={10}
+                  step="0.1"
+                  value={config.regras_recuperacao_final?.media_aprovacao ?? 6}
+                  onChange={e => atualizarRegraRecuperacao('media_aprovacao', Number(e.target.value))}
+                  disabled={!podeEditar}
+                  className="w-24"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 p-3 bg-amber-50/50 rounded-xl border border-amber-100">
+              <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center shrink-0">
+                <AlertCircle size={18} className="text-amber-700" />
+              </div>
+              <div className="flex-1">
+                <p className="text-xs font-semibold text-amber-900 mb-1">MÍNIMO PARA RECUPERAÇÃO</p>
+                <Input
+                  type="number"
+                  min={0}
+                  max={10}
+                  step="0.1"
+                  value={config.regras_recuperacao_final?.media_recuperacao_minima ?? 4}
+                  onChange={e => atualizarRegraRecuperacao('media_recuperacao_minima', Number(e.target.value))}
+                  disabled={!podeEditar}
+                  className="w-24"
+                />
+              </div>
+            </div>
+
+            <label className={`flex items-center gap-3 p-3 rounded-xl border transition-colors ${
+              podeEditar ? 'bg-slate-50 border-slate-200 cursor-pointer' : 'bg-slate-50/50 border-slate-100'
+            }`}>
+              <input
+                type="checkbox"
+                checked={config.regras_recuperacao_final?.usar_maior_nota ?? true}
+                onChange={e => atualizarRegraRecuperacao('usar_maior_nota', e.target.checked)}
+                disabled={!podeEditar}
+                className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+              />
+              <div>
+                <p className="text-xs font-semibold text-slate-900">USAR MAIOR NOTA</p>
+                <p className="text-xs text-slate-500 mt-1">Quando desmarcado, usa média entre bimestre e recuperação.</p>
+              </div>
+            </label>
+          </div>
+        </Card>
+
         {/* Histórico SAEB */}
         <Card>
           <CardHeader
@@ -286,7 +422,7 @@ export default function ConfiguracoesPage() {
         {/* Financeiro */}
         <Card>
           <CardHeader titulo="Parâmetros Financeiros" descricao="Orçamento anual e regras de aprovação" />
-          <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="p-5 grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="flex items-center gap-3 p-3 bg-blue-50/50 rounded-xl border border-blue-100">
               <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center shrink-0">
                 <Wallet size={18} className="text-blue-700" />
@@ -325,6 +461,27 @@ export default function ConfiguracoesPage() {
                     disabled={!podeEditar}
                     className="flex-1"
                   />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 p-3 bg-emerald-50/50 rounded-xl border border-emerald-100">
+              <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center shrink-0">
+                <AlertCircle size={18} className="text-emerald-700" />
+              </div>
+              <div className="flex-1">
+                <p className="text-xs font-semibold text-emerald-900 mb-1">ALERTA PDDE</p>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min={1}
+                    max={90}
+                    value={config.pdde_alerta_dias ?? 15}
+                    onChange={e => atualizar('pdde_alerta_dias', Number(e.target.value))}
+                    disabled={!podeEditar}
+                    className="w-20"
+                  />
+                  <span className="text-sm font-medium text-slate-600">dias antes</span>
                 </div>
               </div>
             </div>
