@@ -59,26 +59,43 @@ export default function AlunosPage() {
     }
   }
 
-  useEffect(() => {
-    const q = query(collection(db, 'alunos'), where('status', '==', filtroStatus), orderBy('nome_completo'))
-    const unsub = onSnapshot(q, async (snap) => {
-      const lista = snap.docs.map(d => ({ id: d.id, ...d.data() }))
-      setAlunos(lista)
+  const [erroQuery, setErroQuery] = useState(null)
 
-      const mMap = {}
-      await Promise.all(lista.map(async (aluno) => {
-        const mq = query(
-          collection(db, 'matriculas'),
-          where('aluno_id', '==', aluno.id),
-          where('ano_letivo', '==', ANO_LETIVO),
-          where('status', '==', 'ativa')
-        )
-        const mSnap = await getDocs(mq)
-        if (!mSnap.empty) mMap[aluno.id] = mSnap.docs[0].data()
-      }))
-      setMatriculasMap(mMap)
-      setCarregando(false)
-    })
+  useEffect(() => {
+    setCarregando(true)
+    setErroQuery(null)
+    const q = query(collection(db, 'alunos'), where('status', '==', filtroStatus), orderBy('nome_completo'))
+    const unsub = onSnapshot(
+      q,
+      async (snap) => {
+        const lista = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        setAlunos(lista)
+
+        const mMap = {}
+        await Promise.all(lista.map(async (aluno) => {
+          try {
+            const mq = query(
+              collection(db, 'matriculas'),
+              where('aluno_id', '==', aluno.id),
+              where('ano_letivo', '==', ANO_LETIVO),
+              where('status', '==', 'ativa')
+            )
+            const mSnap = await getDocs(mq)
+            if (!mSnap.empty) mMap[aluno.id] = mSnap.docs[0].data()
+          } catch (e) {
+            console.warn('matricula query falhou para', aluno.id, e.message)
+          }
+        }))
+        setMatriculasMap(mMap)
+        setCarregando(false)
+      },
+      (err) => {
+        console.error('Erro ao listar alunos:', err)
+        setErroQuery(err.message ?? 'Falha ao carregar alunos. Verifique permissões/índices.')
+        setAlunos([])
+        setCarregando(false)
+      }
+    )
     return unsub
   }, [filtroStatus])
 
@@ -207,6 +224,18 @@ export default function AlunosPage() {
           </Select>
         </div>
       </Card>
+
+      {/* Banner de erro */}
+      {erroQuery && (
+        <div className="mb-4 bg-rose-50 border border-rose-200 text-rose-800 text-sm px-4 py-3 rounded-xl flex items-start gap-2">
+          <AlertCircle size={16} className="mt-0.5 shrink-0" />
+          <div>
+            <p className="font-semibold">Erro ao carregar alunos</p>
+            <p className="text-xs text-rose-700 mt-0.5">{erroQuery}</p>
+            <p className="text-[11px] text-rose-600 mt-1">Verifique no console do navegador o link para criar o índice (caso a mensagem mencione "requires an index").</p>
+          </div>
+        </div>
+      )}
 
       {/* Tabela */}
       <Card>

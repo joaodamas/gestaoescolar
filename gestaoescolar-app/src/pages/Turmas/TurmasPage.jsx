@@ -38,6 +38,7 @@ export default function TurmasPage() {
   const [form, setForm] = useState(formInicial())
 
   const [alunosCount, setAlunosCount] = useState({})
+  const [erroQuery, setErroQuery] = useState(null)
 
   const podeGerenciar = ['diretor', 'coordenador'].includes(perfil?.perfil)
 
@@ -49,17 +50,30 @@ export default function TurmasPage() {
   }
 
   useEffect(() => {
-    const unsub = observarTurmas(ANO_LETIVO, async (lista) => {
-      setTurmas(lista)
-      setCarregando(false)
+    setCarregando(true)
+    setErroQuery(null)
+    const unsub = observarTurmas(
+      ANO_LETIVO,
+      async (lista) => {
+        setTurmas(lista)
+        setCarregando(false)
 
-      // Conta alunos por turma
-      const counts = {}
-      await Promise.all(lista.map(async t => {
-        counts[t.id] = await contarAlunosDaTurma(t.id, ANO_LETIVO)
-      }))
-      setAlunosCount(counts)
-    })
+        // Conta alunos por turma
+        const counts = {}
+        await Promise.all(lista.map(async t => {
+          try {
+            counts[t.id] = await contarAlunosDaTurma(t.id, ANO_LETIVO)
+          } catch (e) {
+            counts[t.id] = 0
+          }
+        }))
+        setAlunosCount(counts)
+      },
+      (err) => {
+        setErroQuery(err.message ?? 'Falha ao carregar turmas. Verifique permissões/índices.')
+        setCarregando(false)
+      }
+    )
     return unsub
   }, [])
 
@@ -155,6 +169,18 @@ export default function TurmasPage() {
           ) : null
         }
       />
+
+      {/* Banner de erro */}
+      {erroQuery && (
+        <div className="mb-4 bg-rose-50 border border-rose-200 text-rose-800 text-sm px-4 py-3 rounded-xl flex items-start gap-2">
+          <AlertCircle size={16} className="mt-0.5 shrink-0" />
+          <div>
+            <p className="font-semibold">Erro ao carregar turmas</p>
+            <p className="text-xs text-rose-700 mt-0.5 break-words">{erroQuery}</p>
+            <p className="text-[11px] text-rose-600 mt-1">Provavelmente é índice do Firestore — abra o console e clique no link da mensagem para criar.</p>
+          </div>
+        </div>
+      )}
 
       {/* Filtros */}
       <Card className="mb-4">

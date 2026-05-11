@@ -27,15 +27,22 @@ export async function listarTodasTurmas(anoLetivo) {
   return snap.docs.map(d => ({ id: d.id, ...d.data() }))
 }
 
-export function observarTurmas(anoLetivo, callback) {
+export function observarTurmas(anoLetivo, callback, errorCallback) {
   const q = query(
     collection(db, 'turmas'),
     where('ano_letivo', '==', anoLetivo ?? ANO_ATUAL),
     orderBy('nome')
   )
-  return onSnapshot(q, snap => {
-    callback(snap.docs.map(d => ({ id: d.id, ...d.data() })))
-  })
+  return onSnapshot(
+    q,
+    snap => callback(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+    err => {
+      console.error('Erro ao observar turmas:', err)
+      errorCallback?.(err)
+      // Garante que o callback é chamado para destravar o loading
+      callback([])
+    }
+  )
 }
 
 export async function buscarTurma(id) {
