@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { useState } from 'react'
+import NotificationBell from './NotificationBell'
 
 const MENU = [
   { secao: 'Visão Geral', items: [
@@ -150,6 +151,11 @@ export default function Sidebar() {
           </div>
           <ChevronDown size={14} className={`text-slate-500 group-hover:text-slate-300 transition-all ${userMenuOpen ? 'rotate-180' : ''}`} />
         </button>
+
+        {/* Sino de notificações */}
+        <div className="absolute top-3 right-3">
+          <NotificationBell />
+        </div>
       </div>
     </aside>
   )

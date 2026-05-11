@@ -4,7 +4,8 @@ import { db } from '../../firebase/firebase'
 import { useAuth } from '../../context/AuthContext'
 import { listarTurmas } from '../../services/turmas'
 import { salvarChamada, buscarChamadaDoDia } from '../../services/presencas'
-import { CheckCircle2, XCircle, Clock, Save, AlertTriangle, CalendarDays } from 'lucide-react'
+import { verificarDiaLetivo } from '../../services/calendario'
+import { CheckCircle2, XCircle, Clock, Save, AlertTriangle, CalendarDays, Info } from 'lucide-react'
 
 const hoje = () => new Date().toISOString().split('T')[0]
 
@@ -28,6 +29,7 @@ export default function ChamadaPage() {
   const [salvando, setSalvando]   = useState(false)
   const [sucesso, setSucesso]     = useState(false)
   const [carregando, setCarregando] = useState(false)
+  const [statusCalendario, setStatusCalendario] = useState(null)
 
   // Carrega turmas (professor vê só as suas)
   useEffect(() => {
@@ -46,6 +48,10 @@ export default function ChamadaPage() {
     setSucesso(false)
 
     async function carregar() {
+      // Verifica se a data é dia letivo no /calendario
+      const statusCal = await verificarDiaLetivo(data, new Date().getFullYear())
+      setStatusCalendario(statusCal)
+
       // Matríulas ativas da turma
       const mq = query(
         collection(db, 'matriculas'),
@@ -183,6 +189,21 @@ export default function ChamadaPage() {
       </div>
 
       {/* Avisos */}
+      {statusCalendario && !statusCalendario.ehLetivo && turmaSel && (
+        <div className="flex items-start gap-3 bg-rose-50 border border-rose-200 text-rose-800 text-sm px-4 py-3 rounded-xl">
+          <Info size={16} className="shrink-0 mt-0.5" />
+          <div>
+            <p className="font-semibold">Esta data não é um dia letivo</p>
+            <p className="text-xs text-rose-700 mt-0.5">
+              {statusCalendario.tipo === 'feriado' && `Feriado: ${statusCalendario.descricao}`}
+              {statusCalendario.tipo === 'recesso' && `Recesso: ${statusCalendario.descricao || 'período de recesso escolar'}`}
+              {statusCalendario.tipo === 'fim_semana' && 'Sábado ou domingo'}
+              {statusCalendario.tipo === 'evento' && `Evento: ${statusCalendario.descricao}`}
+              {' · A chamada não deve ser registrada.'}
+            </p>
+          </div>
+        </div>
+      )}
       {jaExiste && !bloqueada && !sucesso && (
         <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 text-blue-700 text-sm px-4 py-3 rounded-xl">
           <CalendarDays size={16} /> Chamada já registrada para este dia.

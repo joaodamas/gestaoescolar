@@ -70,7 +70,7 @@
 - [x] Modelagem `/matriculas` (com `ano_letivo`, `status`, `numero_matricula` auto-gerado)
 - [x] Modelagem `/turmas`
 - [ ] Modelagem `/disciplinas`
-- [ ] Modelagem `/calendario`
+- [x] Modelagem `/calendario` + `services/calendario.js`
 
 ### Endereço com Auto-preenchimento por CEP 🔴 NOVO — CRÍTICO
 - [x] Utilitário `utils/cep.js` com integração ViaCEP API
@@ -115,11 +115,17 @@
 - [ ] Botão "Ver Perfil" por aluno
 
 ### Perfil do Aluno
-- [ ] Dados pessoais (CPF mascarado: `***.***.***-**`)
-- [ ] Responsáveis vinculados
-- [ ] Histórico de matrículas por ano
-- [ ] Abas: Notas | Presença | Ocorrências
-- [ ] Exportação de dados individuais (PDF — LGPD)
+- [x] Modal expansivo com 5 abas (Dados / Histórico / Presença / Notas / Ocorrências)
+- [x] Hero do aluno com avatar gradiente, status e turma atual
+- [x] Dados pessoais (CPF mascarado: `***.NNN.***-**`)
+- [x] Endereço completo formatado
+- [x] Responsáveis vinculados com badges Financeiro/Pedagógico
+- [x] Histórico de matrículas por ano
+- [x] Aba Presença: cards com presença %, presentes/ausentes/justificados + alerta 25%
+- [x] Aba Notas: tabela com situação por bimestre
+- [x] Aba Ocorrências: lista cronológica com gravidade colorida
+- [x] Click na linha da tabela de alunos abre o perfil
+- [ ] Exportação de dados individuais (PDF — LGPD) — botão presente, falta implementar
 
 ### Serviços
 - [x] `services/alunos.js`
@@ -134,7 +140,7 @@
 ### Chamada / Presença
 - [x] Dropdown de turmas (somente turmas do professor logado via `turmas_ids`)
 - [x] Seletor de data (default: hoje)
-- [ ] Verificar `/calendario` se a data é dia letivo — aviso se não for
+- [x] Verificar `/calendario` se a data é dia letivo — aviso vermelho se feriado/recesso/fim de semana
 - [x] Verificar se chamada do dia já existe (aviso visual)
 - [x] Carregar alunos da turma via `/matriculas` ativas
 - [x] Botões P (verde) / F (vermelho) / J (amarelo) por aluno
@@ -397,9 +403,14 @@
 - [ ] `Avatar` com fallback de iniciais
 
 ### Notificações
-- [ ] Coleção `/notificacoes` e modelo de dados
-- [ ] Sino de notificações no header com badge de não lidas
-- [ ] Marcar como lida
+- [x] Coleção `/notificacoes` e modelo de dados
+- [x] Sino de notificações no Sidebar com badge de não lidas (até 99+)
+- [x] Painel dropdown com últimas 20 notificações
+- [x] Marcar como lida (clique individual)
+- [x] Marcar todas como lidas (botão `CheckCheck`)
+- [x] Ícones contextuais por tipo (faltas/prazos/notas/despesas)
+- [x] Tempo relativo (Agora, 5min, 2h, 3d)
+- [x] Realtime via `onSnapshot`
 - [x] Cloud Function `alertarPrazos()` — pendências ≤ 7 dias
 - [x] Cloud Function `onPresencaSalva` — faltas ≥ 25%
 - [ ] Cloud Function monitora ocorrências graves

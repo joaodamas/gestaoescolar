@@ -16,6 +16,7 @@ import { Card, Badge, EmptyState, Spinner } from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import { Input, Select } from '../../components/ui/Input'
 import Modal from '../../components/ui/Modal'
+import PerfilAlunoModal from './PerfilAlunoModal'
 
 const ANO_LETIVO = new Date().getFullYear()
 
@@ -37,6 +38,7 @@ export default function AlunosPage() {
   const [filtroStatus, setFiltroStatus] = useState('ativo')
   const [carregando, setCarregando] = useState(true)
   const [drawerAberto, setDrawerAberto] = useState(false)
+  const [alunoPerfilAberto, setAlunoPerfilAberto] = useState(null)
   const [form, setForm] = useState(formInicial())
   const [abaAtiva, setAbaAtiva] = useState('aluno')
   const [salvando, setSalvando] = useState(false)
@@ -233,7 +235,11 @@ export default function AlunosPage() {
                 {alunosFiltrados.map(aluno => {
                   const badge = STATUS_BADGE[aluno.status] ?? { label: aluno.status, variante: 'slate' }
                   return (
-                    <tr key={aluno.id} className="hover:bg-slate-50 transition-colors group cursor-pointer">
+                    <tr
+                      key={aluno.id}
+                      onClick={() => setAlunoPerfilAberto(aluno)}
+                      className="hover:bg-slate-50 transition-colors group cursor-pointer"
+                    >
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-3">
                           <div className="w-9 h-9 bg-gradient-to-br from-blue-100 to-blue-50 rounded-full ring-1 ring-blue-200 flex items-center justify-center text-blue-700 shrink-0">
@@ -574,6 +580,13 @@ export default function AlunosPage() {
           </form>
         )}
       </Modal>
+
+      {/* Perfil do Aluno */}
+      <PerfilAlunoModal
+        aluno={alunoPerfilAberto}
+        aberto={!!alunoPerfilAberto}
+        onFechar={() => setAlunoPerfilAberto(null)}
+      />
     </div>
   )
 }
