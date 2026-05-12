@@ -11,7 +11,24 @@ function gerarNumeroMatricula(ano) {
   return `${ano}${timestamp}`
 }
 
-export async function criarMatricula(alunoId, turmaId, anoLetivo, criadoPor) {
+export function montarResumoAlunoMatricula(aluno = {}) {
+  return {
+    aluno_nome: aluno.nome_completo?.trim?.() || aluno.aluno_nome?.trim?.() || '',
+    aluno_ra: aluno.ra?.trim?.() || aluno.aluno_ra?.trim?.() || '',
+  }
+}
+
+export function alunoResumoDaMatricula(matricula = {}) {
+  return {
+    id: matricula.aluno_id,
+    matriculaId: matricula.id,
+    nome_completo: matricula.aluno_nome || 'Aluno sem nome sincronizado',
+    ra: matricula.aluno_ra || '',
+    matricula,
+  }
+}
+
+export async function criarMatricula(alunoId, turmaId, anoLetivo, criadoPor, alunoResumo = {}) {
   return addDoc(collection(db, 'matriculas'), {
     aluno_id: alunoId,
     turma_id: turmaId,
@@ -20,6 +37,7 @@ export async function criarMatricula(alunoId, turmaId, anoLetivo, criadoPor) {
     status: 'ativa',
     numero_matricula: gerarNumeroMatricula(anoLetivo ?? ANO_ATUAL),
     observacoes: '',
+    ...montarResumoAlunoMatricula(alunoResumo),
     created_by: criadoPor,
     created_at: serverTimestamp(),
   })

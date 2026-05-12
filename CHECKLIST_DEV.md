@@ -77,7 +77,7 @@
 - [x] Regras para `/indicadores` — todos leem (somente leitura), só Cloud Functions escrevem
 - [x] Regras para `/configuracoes` — todos leem, Diretor/Admin escrevem
 - [ ] Mascaramento de CPF e telefone diretamente nas regras do Firestore
-- [ ] **QA:** Resolver acesso seguro do professor a dados mínimos de alunos via `/matriculas` ou `/alunos_resumo`
+- [x] **QA:** Resolver acesso seguro do professor a dados mínimos de alunos via `/matriculas` ou `/alunos_resumo`
 - [x] **QA:** Alinhar rules/UI do Financeiro: Admin cria, Diretor aprova, Admin não aprova
 - [x] **QA:** Separar `create/update/delete` em projetos e pendências; `allow delete: if false`
 
@@ -97,6 +97,7 @@
 - [x] Modelagem `/alunos` (sem `turma_id` direto — vínculo via `/matriculas`)
 - [x] Modelagem `/responsaveis`
 - [x] Modelagem `/matriculas` (com `ano_letivo`, `status`, `numero_matricula` auto-gerado)
+- [x] `/matriculas` armazena resumo seguro (`aluno_nome`, `aluno_ra`) para fluxos de professor sem ler `/alunos`
 - [x] Modelagem `/turmas`
 - [x] Modelagem `/disciplinas`
 - [x] Modelagem `/calendario` + `services/calendario.js`
@@ -766,14 +767,13 @@
   - [ ] `auditarAcaoCallable` — criado no código, deploy pendente
 
 ### Próximas prioridades imediatas:
-1. **🔴 Corrigir permissões/modelagem do professor** — criar caminho seguro via `/matriculas` ou `/alunos_resumo` para Chamada, Notas, Diário e Relatórios
-2. **🔴 Corrigir rules críticas apontadas pelo QA** — Financeiro Admin cria/Diretor aprova, soft delete em projetos/pendências e callable de auditoria sem identidade enviada pelo cliente
-3. **🔴 Arquitetar Fase 12 antes de criar telas** — rotas, perfis, unidade escolar, models, índices, storage seguro e auditoria por módulo sensível
-4. **🟠 Diário de Classe Avançado** — visão semanal, atribuição de horário, pendências, deferimento, fechamento e assinatura
-5. **🟠 Secretaria/Matrículas** — busca dedicada, deferimento, timeline de situação e movimentação escolar
-6. **🟠 Saúde/NDPD** — módulo separado, permissão própria, auditoria obrigatória e convênio médico estudante
-7. **🟡 Relatórios oficiais** — revalidar cálculos de notas/frequência e criar hub com carômetro, mapa de ausência, atas e documentos
-8. **🟡 Limpar lint e criar smoke tests** — rotas principais, PDF/Excel e fluxos críticos
+1. **🔴 Arquitetar Fase 12 antes de criar telas** — rotas, perfis, unidade escolar, models, índices, storage seguro e auditoria por módulo sensível
+2. **🟠 Diário de Classe Avançado** — visão semanal, atribuição de horário, pendências, deferimento, fechamento e assinatura
+3. **🟠 Secretaria/Matrículas** — busca dedicada, deferimento, timeline de situação e movimentação escolar
+4. **🟠 Saúde/NDPD** — módulo separado, permissão própria, auditoria obrigatória e convênio médico estudante
+5. **🟡 Relatórios oficiais** — revalidar cálculos de notas/frequência e criar hub com carômetro, mapa de ausência, atas e documentos
+6. **🟡 Backfill operacional** — sincronizar `aluno_nome` e `aluno_ra` em matrículas antigas para professor enxergar registros legados
+7. **🟡 Limpar lint e criar smoke tests** — rotas principais, PDF/Excel e fluxos críticos
 
 ### Fora do checklist original — pendências encontradas em 11/05/2026
 - [x] Centralizar a matriz `MODULOS_POR_PERFIL` para não duplicar em `Sidebar.jsx` e `PrivateRoute.jsx`

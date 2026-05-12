@@ -1,13 +1,13 @@
-import { useEffect, useState } from 'react'
-import { collection, query, where, orderBy, onSnapshot, getDocs, addDoc, serverTimestamp } from 'firebase/firestore'
+import { useEffect, useRef, useState } from 'react'
+import { collection, query, where, orderBy, onSnapshot, getDocs } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage } from '../../firebase/firebase'
 import { useAuth } from '../../context/AuthContext'
 import { criarAluno, atualizarAluno } from '../../services/alunos'
-import { criarMatricula, atualizarMatricula } from '../../services/matriculas'
+import { criarMatricula, atualizarMatricula, montarResumoAlunoMatricula } from '../../services/matriculas'
 import { listarResponsaveis, criarResponsavel, atualizarResponsavel } from '../../services/responsaveis'
 import { listarTurmas } from '../../services/turmas'
-import { mascararCPF, formatarCPF, formatarTelefone } from '../../utils/mascaramento'
+import { mascararCPF, formatarCPF, formatarTelefone, validarCPF } from '../../utils/mascaramento'
 import { consultarCEP, formatarCEP } from '../../utils/cep'
 import { exportarParaExcel, formatarParaExportacao } from '../../utils/exportExcel'
 import {
@@ -50,6 +50,7 @@ export default function AlunosPage() {
   const [erroForm, setErroForm] = useState('')
   const [buscandoCEP, setBuscandoCEP] = useState(false)
   const [cepErro, setCepErro] = useState('')
+  const carregamentoSeq = useRef(0)
 
   function formInicial() {
     return {
@@ -79,6 +80,9 @@ export default function AlunosPage() {
   const [erroQuery, setErroQuery] = useState(null)
 
   useEffect(() => {
+    let ativo = true
+    const execucao = carregamentoSeq.current + 1
+    carregamentoSeq.current = execucao
     setCarregando(true)
     setErroQuery(null)
     const q = query(collection(db, 'alunos'), where('status', '==', filtroStatus), orderBy('nome_completo'))
@@ -86,6 +90,7 @@ export default function AlunosPage() {
       q,
       async (snap) => {
         const lista = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        if (!ativo || carregamentoSeq.current !== execucao) return
         setAlunos(lista)
 
         const mMap = {}
@@ -103,17 +108,22 @@ export default function AlunosPage() {
             console.warn('matricula query falhou para', aluno.id, e.message)
           }
         }))
+        if (!ativo || carregamentoSeq.current !== execucao) return
         setMatriculasMap(mMap)
         setCarregando(false)
       },
       (err) => {
+        if (!ativo || carregamentoSeq.current !== execucao) return
         console.error('Erro ao listar alunos:', err)
         setErroQuery(err.message ?? 'Falha ao carregar alunos. Verifique permissões/índices.')
         setAlunos([])
         setCarregando(false)
       }
     )
-    return unsub
+    return () => {
+      ativo = false
+      unsub()
+    }
   }, [filtroStatus])
 
   useEffect(() => { listarTurmas(ANO_LETIVO).then(setTurmas) }, [])
@@ -283,14 +293,16 @@ export default function AlunosPage() {
     setErroForm('')
     if (!form.nome_completo.trim()) { setErroForm('Nome do aluno é obrigatório.'); return }
     if (!form.data_nascimento) { setErroForm('Data de nascimento é obrigatória.'); return }
+    if (!validarCPF(form.cpf)) { setErroForm('CPF inválido. Confira os dígitos informados.'); return }
     if (!form.turma_id) { setErroForm('Selecione uma turma.'); return }
     if (!form.resp_consentimento) { setErroForm('Consentimento LGPD obrigatório.'); return }
     setSalvando(true)
     try {
       const fotoUrl = await resolverFotoUrl()
-      const alunoRef = await criarAluno(montarDadosAluno(fotoUrl), user.uid, form.resp_consentimento)
+      const dadosAluno = montarDadosAluno(fotoUrl)
+      const alunoRef = await criarAluno(dadosAluno, user.uid, form.resp_consentimento)
 
-      await addDoc(collection(db, 'responsaveis'), {
+      await criarResponsavel({
         aluno_id: alunoRef.id,
         nome: form.resp_nome,
         parentesco: form.resp_parentesco,
@@ -300,11 +312,15 @@ export default function AlunosPage() {
         responsavel_financeiro: form.resp_financeiro,
         responsavel_pedagogico: form.resp_pedagogico,
         consentimento_lgpd: form.resp_consentimento,
-        consentimento_data: serverTimestamp(),
-        created_at: serverTimestamp(),
       })
 
-      await criarMatricula(alunoRef.id, form.turma_id, form.ano_letivo, user.uid)
+      await criarMatricula(
+        alunoRef.id,
+        form.turma_id,
+        form.ano_letivo,
+        user.uid,
+        montarResumoAlunoMatricula(dadosAluno),
+      )
 
       setDrawerAberto(false)
       setForm(formInicial())
@@ -323,16 +339,19 @@ export default function AlunosPage() {
     setErroForm('')
     if (!form.nome_completo.trim()) { setErroForm('Nome do aluno é obrigatório.'); return }
     if (!form.data_nascimento) { setErroForm('Data de nascimento é obrigatória.'); return }
+    if (!validarCPF(form.cpf)) { setErroForm('CPF inválido. Confira os dígitos informados.'); return }
     setSalvando(true)
     try {
       const fotoUrl = await resolverFotoUrl()
-      await atualizarAluno(editandoAluno.id, montarDadosAluno(fotoUrl))
+      const dadosAluno = montarDadosAluno(fotoUrl)
+      await atualizarAluno(editandoAluno.id, dadosAluno)
 
       const matriculaAtual = matriculasMap[editandoAluno.id]
       if (matriculaAtual?.id) {
         await atualizarMatricula(matriculaAtual.id, {
           turma_id: form.turma_id,
           ano_letivo: Number(form.ano_letivo) || ANO_LETIVO,
+          ...montarResumoAlunoMatricula(dadosAluno),
         })
       }
 

@@ -1,8 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
-import { collection, query, where, getDocs, getDoc, doc } from 'firebase/firestore'
-import { db } from '../../firebase/firebase'
 import { useAuth } from '../../context/AuthContext'
 import { listarTurmas } from '../../services/turmas'
+import { alunoResumoDaMatricula, listarMatriculasDaTurma } from '../../services/matriculas'
 import { salvarChamada, buscarChamadaDoDia, historicoChamadas } from '../../services/presencas'
 import { verificarDiaLetivo } from '../../services/calendario'
 import { CheckCircle2, XCircle, Clock, Save, AlertTriangle, CalendarDays, Info, History, X } from 'lucide-react'
@@ -56,26 +55,10 @@ export default function ChamadaPage() {
       const statusCal = await verificarDiaLetivo(data, new Date().getFullYear())
       setStatusCalendario(statusCal)
 
-      // Matríulas ativas da turma
-      const mq = query(
-        collection(db, 'matriculas'),
-        where('turma_id', '==', turmaSel),
-        where('ano_letivo', '==', new Date().getFullYear()),
-        where('status', '==', 'ativa')
-      )
-      const mSnap = await getDocs(mq)
-      const matriculas = mSnap.docs.map(d => ({ id: d.id, ...d.data() }))
-
-      // S-3 QA: usa imports estáticos — sem dynamic import dentro de loop
-      const alunosData = await Promise.all(
-        matriculas.map(async m => {
-          const snap = await getDoc(doc(db, 'alunos', m.aluno_id))
-          return snap.exists()
-            ? { id: snap.id, matriculaId: m.id, ...snap.data() }
-            : null
-        })
-      )
-      const lista = alunosData.filter(Boolean).sort((a, b) => a.nome_completo.localeCompare(b.nome_completo))
+      const matriculas = await listarMatriculasDaTurma(turmaSel, new Date().getFullYear())
+      const lista = matriculas
+        .map(alunoResumoDaMatricula)
+        .sort((a, b) => a.nome_completo.localeCompare(b.nome_completo, 'pt-BR'))
       setAlunos(lista)
 
       // Verifica se chamada do dia já existe

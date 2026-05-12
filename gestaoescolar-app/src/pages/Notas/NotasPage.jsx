@@ -1,9 +1,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
-import { getDoc, doc } from 'firebase/firestore'
-import { db } from '../../firebase/firebase'
 import { useAuth } from '../../context/AuthContext'
 import { listarTurmas } from '../../services/turmas'
-import { listarMatriculasDaTurma } from '../../services/matriculas'
+import { alunoResumoDaMatricula, listarMatriculasDaTurma } from '../../services/matriculas'
 import {
   listarDisciplinasDaTurma,
   listarAvaliacoes,
@@ -314,19 +312,12 @@ export default function NotasPage() {
     if (!turmaSel) { setAlunos([]); return }
     setCarregandoAlunos(true)
     listarMatriculasDaTurma(turmaSel, ANO_LETIVO)
-      .then(async matriculas => {
-        const lista = await Promise.all(
-          matriculas.map(async m => {
-            const snap = await getDoc(doc(db, 'alunos', m.aluno_id))
-            return snap.exists()
-              ? { id: snap.id, matriculaId: m.id, ...snap.data() }
-              : null
-          })
-        )
+      .then(matriculas => {
+        const lista = matriculas
+          .map(alunoResumoDaMatricula)
+          .sort((a, b) => a.nome_completo.localeCompare(b.nome_completo, 'pt-BR'))
         setAlunos(
-          lista
-            .filter(Boolean)
-            .sort((a, b) => a.nome_completo.localeCompare(b.nome_completo))
+          lista.filter(a => a.id)
         )
       })
       .catch(err => {
