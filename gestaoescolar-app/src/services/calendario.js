@@ -1,5 +1,5 @@
 import {
-  collection, doc, addDoc, updateDoc, deleteDoc, getDocs,
+  collection, doc, addDoc, updateDoc, getDocs,
   query, where, serverTimestamp
 } from 'firebase/firestore'
 import { db } from '../firebase/firebase'
@@ -14,6 +14,7 @@ export async function listarCalendario(anoLetivo) {
   const snap = await getDocs(q)
   return snap.docs
     .map(d => ({ id: d.id, ...d.data() }))
+    .filter(ev => ev.ativo !== false)
     .sort((a, b) => (a.data ?? '').localeCompare(b.data ?? ''))
 }
 
@@ -28,6 +29,7 @@ export async function listarProximosEventos(limite = 5, anoLetivo = ANO_ATUAL) {
   const snap = await getDocs(q)
   return snap.docs
     .map(d => ({ id: d.id, ...d.data() }))
+    .filter(ev => ev.ativo !== false)
     .filter(ev => (ev.data ?? '') >= dataHoje)
     .sort((a, b) => (a.data ?? '').localeCompare(b.data ?? ''))
     .slice(0, limite)
@@ -48,7 +50,9 @@ export async function verificarDiaLetivo(data, anoLetivo) {
   const snap = await getDocs(q)
 
   if (!snap.empty) {
-    const reg = snap.docs[0].data()
+    const ativo = snap.docs.find(d => d.data().ativo !== false)
+    if (!ativo) return { ehLetivo: true, tipo: 'aula', descricao: '' }
+    const reg = ativo.data()
     return {
       ehLetivo: reg.tipo === 'aula' || reg.tipo === 'reposicao',
       tipo: reg.tipo,
@@ -81,7 +85,10 @@ export async function atualizarEvento(id, dados) {
 }
 
 export async function removerEvento(id) {
-  return deleteDoc(doc(db, 'calendario', id))
+  return updateDoc(doc(db, 'calendario', id), {
+    ativo: false,
+    arquivado_em: serverTimestamp(),
+  })
 }
 
 export async function contarDiasLetivos(anoLetivo) {
@@ -90,5 +97,5 @@ export async function contarDiasLetivos(anoLetivo) {
     where('ano_letivo', '==', anoLetivo ?? ANO_ATUAL)
   )
   const snap = await getDocs(q)
-  return snap.docs.filter(d => ['aula', 'reposicao'].includes(d.data().tipo)).length
+  return snap.docs.filter(d => d.data().ativo !== false && ['aula', 'reposicao'].includes(d.data().tipo)).length
 }

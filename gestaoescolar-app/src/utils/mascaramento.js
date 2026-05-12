@@ -22,6 +22,26 @@ export function formatarCPF(cpf) {
     .replace(/(\d{3})(\d{1,2})$/, '$1-$2')
 }
 
+export function validarCPF(cpf) {
+  const limpo = String(cpf ?? '').replace(/\D/g, '')
+  if (!limpo) return true
+  if (limpo.length !== 11) return false
+  if (/^(\d)\1+$/.test(limpo)) return false
+
+  const calcularDigito = (base) => {
+    let soma = 0
+    for (let i = 0; i < base.length; i += 1) {
+      soma += Number(base[i]) * (base.length + 1 - i)
+    }
+    const resto = (soma * 10) % 11
+    return resto === 10 ? 0 : resto
+  }
+
+  const d1 = calcularDigito(limpo.slice(0, 9))
+  const d2 = calcularDigito(limpo.slice(0, 10))
+  return d1 === Number(limpo[9]) && d2 === Number(limpo[10])
+}
+
 export function formatarTelefone(tel) {
   const limpo = tel.replace(/\D/g, '').slice(0, 11)
   if (limpo.length <= 10) {

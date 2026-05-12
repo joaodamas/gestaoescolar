@@ -7,7 +7,7 @@ import {
   AlertTriangle, RefreshCw, FileDown, FlaskConical, Heart, Users2,
   ArrowUpRight, BookOpen, BookMarked, ChevronRight, Calendar,
   ClipboardList, Activity, Target, Sparkles, Zap, ShieldAlert,
-  PartyPopper, Coffee, CalendarCheck, RotateCcw
+  PartyPopper, Coffee, CalendarCheck, RotateCcw, Settings, ShieldCheck
 } from 'lucide-react'
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
@@ -20,6 +20,8 @@ import { buscarConfiguracoes } from '../../services/configuracoes'
 import { listarProximosEventos } from '../../services/calendario'
 import { Card, CardHeader, Badge, Spinner } from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
+import ModuleHub from '../../components/shared/ModuleHub'
+import { MODULOS_POR_PERFIL } from '../../config/permissoes'
 
 const ANO_LETIVO = new Date().getFullYear()
 

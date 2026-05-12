@@ -4,6 +4,8 @@ import { db } from '../../firebase/firebase'
 import { listarResponsaveis } from '../../services/responsaveis'
 import { listarMatriculasDoAluno } from '../../services/matriculas'
 import { listarCalendario } from '../../services/calendario'
+import { auditarAcao } from '../../services/auditoria'
+import { useAuth } from '../../context/AuthContext'
 import { mascararCPF, mascararTelefone } from '../../utils/mascaramento'
 import { baixarPDF, slugify, Document } from '../../utils/exportPDF'
 import { resumirFrequencia } from '../../utils/frequencia'
@@ -30,6 +32,7 @@ const STATUS_OCORR = {
 }
 
 export default function PerfilAlunoModal({ aluno, aberto, onFechar }) {
+  const { user, perfil } = useAuth()
   const [aba, setAba] = useState('dados')
   const [responsaveis, setResponsaveis] = useState([])
   const [historico, setHistorico] = useState([])
@@ -104,6 +107,22 @@ export default function PerfilAlunoModal({ aluno, aberto, onFechar }) {
 
     carregarDados()
   }, [aberto, aluno])
+
+  useEffect(() => {
+    if (!aberto || !aluno?.id || !user?.uid) return
+    if (!aluno.saude || Object.keys(aluno.saude).length === 0) return
+
+    auditarAcao({
+      usuarioId: user.uid,
+      perfil: perfil?.perfil,
+      acao: 'ACESSO_DADOS_MEDICOS_ALUNO',
+      modulo: 'alunos',
+      entidade: 'alunos',
+      entidadeId: aluno.id,
+      valorNovo: { aluno_id: aluno.id, campos: Object.keys(aluno.saude) },
+      motivo: 'Acesso ao perfil do aluno com dados de saúde/acessibilidade.',
+    }).catch(err => console.warn('Falha ao auditar acesso a dados médicos:', err))
+  }, [aberto, aluno?.id, user?.uid, perfil?.perfil])
 
   if (!aluno) return null
 

@@ -60,11 +60,19 @@ service cloud.firestore {
     // ── /matriculas ──────────────────────────────────────────────────────
     match /matriculas/{matId} {
       allow read: if isAtivo() && (
-        isAnyOf(['diretor', 'coordenador'])
+        isAnyOf(['diretor', 'coordenador', 'admin', 'secretaria'])
         || (isPerfil('professor') && hasMinhasTurmas(resource.data.turma_id))
       );
-      allow create: if isAtivo() && isAnyOf(['diretor', 'coordenador']);
-      allow update: if isAtivo() && isAnyOf(['diretor', 'coordenador']);
+      allow create: if isAtivo() && isAnyOf(['diretor', 'coordenador', 'secretaria']);
+      allow update: if isAtivo() && isAnyOf(['diretor', 'coordenador', 'secretaria']);
+      allow delete: if false;
+    }
+
+    // ── /intencoes_vaga ──────────────────────────────────────────────────
+    match /intencoes_vaga/{intId} {
+      allow read:   if isAtivo() && isAnyOf(['diretor', 'coordenador', 'admin', 'secretaria']);
+      allow create: if isAtivo() && isAnyOf(['diretor', 'coordenador', 'secretaria']);
+      allow update: if isAtivo() && isAnyOf(['diretor', 'coordenador', 'secretaria']);
       allow delete: if false;
     }
 

@@ -12,30 +12,37 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        const snap = await getDoc(doc(db, 'usuarios', firebaseUser.uid))
-        if (snap.exists() && snap.data().ativo !== false) {
-          setPerfil({ id: snap.id, ...snap.data() })
-          setUser(firebaseUser)
+      try {
+        if (firebaseUser) {
+          const snap = await getDoc(doc(db, 'usuarios', firebaseUser.uid))
+          if (snap.exists() && snap.data().ativo !== false) {
+            setPerfil({ id: snap.id, ...snap.data() })
+            setUser(firebaseUser)
+          } else {
+            await signOut(auth)
+            setUser(null)
+            setPerfil(null)
+          }
         } else {
-          await signOut(auth)
           setUser(null)
           setPerfil(null)
         }
-      } else {
+      } catch (err) {
+        console.error('Erro ao carregar perfil do usuário:', err)
         setUser(null)
         setPerfil(null)
+      } finally {
+        setLoading(false)
       }
-      setLoading(false)
     })
     return unsubscribe
   }, [])
 
   async function login(email, senha) {
     const cred = await signInWithEmailAndPassword(auth, email, senha)
-    await updateDoc(doc(db, 'usuarios', cred.user.uid), {
+    updateDoc(doc(db, 'usuarios', cred.user.uid), {
       ultimo_acesso: serverTimestamp(),
-    })
+    }).catch(err => console.warn('Falha ao atualizar último acesso:', err))
     return cred
   }
 

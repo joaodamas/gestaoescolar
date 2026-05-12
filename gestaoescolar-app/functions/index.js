@@ -1,5 +1,5 @@
-const { onCall, onRequest } = require('firebase-functions/v2/https')
-const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore')
+const { onCall, onRequest, HttpsError } = require('firebase-functions/v2/https')
+const { onDocumentCreated, onDocumentUpdated, onDocumentWritten } = require('firebase-functions/v2/firestore')
 const { onSchedule } = require('firebase-functions/v2/scheduler')
 const admin = require('firebase-admin')
 
@@ -37,6 +37,48 @@ async function criarNotificacao({ destinatarioId, tipo, titulo, mensagem, refere
     referencia_id: referenciaId ?? '',
     referencia_modulo: referenciaModulo ?? '',
   })
+}
+
+// ── Helper: buscar perfil de um usuário (best-effort) ─────────────────────
+async function resolverPerfil(uid) {
+  if (!uid || uid === 'system') return 'system'
+  try {
+    const snap = await db.collection('usuarios').doc(uid).get()
+    if (snap.exists) return snap.data().perfil ?? 'desconhecido'
+  } catch (err) {
+    console.warn('Falha ao resolver perfil:', err?.message ?? err)
+  }
+  return 'desconhecido'
+}
+
+// ── Helper: notificar usuários ativos por perfil ──────────────────────────
+async function notificarPorPerfil(perfis, payload) {
+  const lista = Array.isArray(perfis) ? perfis : [perfis]
+  const snap = await db.collection('usuarios')
+    .where('perfil', 'in', lista)
+    .where('ativo', '==', true)
+    .get()
+
+  await Promise.all(snap.docs.map(async (u) => {
+    const idDoc = payload.dedupeId ? `${payload.dedupeId}_${u.id}` : undefined
+    const ref = idDoc
+      ? db.collection('notificacoes').doc(idDoc)
+      : db.collection('notificacoes').doc()
+    if (idDoc) {
+      const existente = await ref.get()
+      if (existente.exists) return
+    }
+    await ref.set({
+      destinatario_id: u.id,
+      tipo: payload.tipo,
+      titulo: payload.titulo,
+      mensagem: payload.mensagem,
+      lida: false,
+      data_envio: admin.firestore.FieldValue.serverTimestamp(),
+      referencia_id: payload.referenciaId ?? '',
+      referencia_modulo: payload.referenciaModulo ?? '',
+    })
+  }))
 }
 
 function dataEhDiaUtil(data) {

@@ -13,6 +13,7 @@ import { Card, Badge, EmptyState, Spinner } from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import { Input, Select } from '../../components/ui/Input'
 import Modal from '../../components/ui/Modal'
+import { exportarParaExcel, formatarParaExportacao } from '../../utils/exportExcel'
 
 const ACOES_INFO = {
   // Notas
@@ -151,6 +152,25 @@ export default function AuditoriaPage() {
     }
   }, [registros])
 
+  function exportarAuditoria() {
+    const linhas = formatarParaExportacao(registrosFiltrados, {
+      'Data/Hora': r => formatarTimestamp(r.created_at),
+      'Ação': r => infoAcao(r.acao).label,
+      'Código da ação': 'acao',
+      'Módulo': 'modulo',
+      'Usuário': r => usuariosMap[r.usuario_id]?.nome ?? r.usuario_id ?? '',
+      'Email': r => usuariosMap[r.usuario_id]?.email ?? '',
+      'Perfil': 'perfil',
+      'Entidade': 'entidade',
+      'ID entidade': 'entidade_id',
+      'Motivo': 'motivo',
+      'Valor anterior': r => r.valor_anterior ? JSON.stringify(r.valor_anterior) : '',
+      'Valor novo': r => r.valor_novo ? JSON.stringify(r.valor_novo) : '',
+      'IP': 'ip',
+    })
+    exportarParaExcel(linhas, `auditoria-${new Date().toISOString().slice(0, 10)}`, 'Auditoria')
+  }
+
   if (!podeAcessar) {
     return (
       <div>
@@ -172,7 +192,7 @@ export default function AuditoriaPage() {
         titulo="Trilha de Auditoria"
         descricao="Registros imutáveis de todas as ações críticas do sistema"
         icon={ShieldCheck}
-        acoes={<Button variante="secondary" icon={Download}>Exportar Excel</Button>}
+        acoes={<Button variante="secondary" icon={Download} onClick={exportarAuditoria}>Exportar Excel</Button>}
       />
 
       {/* Estatísticas rápidas */}

@@ -20,6 +20,7 @@ const RelatoriosPage = lazy(() => import('./pages/Relatorios/RelatoriosPage'))
 const ConfiguracoesPage = lazy(() => import('./pages/Configuracoes/ConfiguracoesPage'))
 const UsuariosPage = lazy(() => import('./pages/Usuarios/UsuariosPage'))
 const AuditoriaPage = lazy(() => import('./pages/Auditoria/AuditoriaPage'))
+const SecretariaPage = lazy(() => import('./pages/Secretaria/SecretariaPage'))
 
 function PageFallback() {
   return (
@@ -51,6 +52,9 @@ export default function App() {
               } />
               <Route path="/alunos" element={
                 <PrivateRoute modulo="alunos"><AlunosPage /></PrivateRoute>
+              } />
+              <Route path="/secretaria" element={
+                <PrivateRoute modulo="secretaria"><SecretariaPage /></PrivateRoute>
               } />
               <Route path="/chamada" element={
                 <PrivateRoute modulo="chamada"><ChamadaPage /></PrivateRoute>

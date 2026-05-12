@@ -195,7 +195,7 @@
 - [x] Botão "Ver Histórico" de chamadas anteriores
 - [x] Campos bloqueados após 48h (`editavel_ate`) — exibir "Solicitar edição ao Coordenador"
 - [x] Aviso visual se chamada já salva no dia
-- [ ] `hook/usePresenca.js`
+- [x] `hook/usePresenca.js`
 - [x] `services/presencas.js`
 
 ### Lançamento de Notas
@@ -480,10 +480,10 @@
 ### Diretriz de Produto / UX
 - [ ] Consolidar o menu legado em áreas claras: Secretaria, Pedagógico, Saúde, Nutrição, Relatórios, Gestão Escolar, Integrações e Administração
 - [ ] Evitar replicar o menu profundo do SisEduc; usar hubs por módulo com cards de ações, filtros salvos e atalhos recentes
-- [ ] Padronizar telas de busca com: ano letivo, turma/série, situação/status, nome, RA, filtros avançados e ações de exportação
-- [ ] Criar componente reutilizável `SearchPanel` para filtros densos de secretaria e relatórios
-- [ ] Criar componente reutilizável `DataActionTable` com paginação, seleção, ações por linha, ícones com tooltip e exportação
-- [ ] Criar componente reutilizável `ModuleHub` para agrupar submódulos com cards compactos e indicadores
+- [x] Padronizar telas de busca com: ano letivo, turma/série, situação/status, nome, RA, filtros avançados e ações de exportação
+- [x] Criar componente reutilizável `SearchPanel` para filtros densos de secretaria e relatórios
+- [x] Criar componente reutilizável `DataActionTable` com paginação, seleção, ações por linha, ícones com tooltip e exportação
+- [x] Criar componente reutilizável `ModuleHub` para agrupar submódulos com cards compactos e indicadores
 - [ ] Padronizar estados vazios: nenhum resultado, sem permissão, sem configuração e erro de carregamento, sempre com ação recomendada
 - [ ] Criar autocomplete reutilizável para aluno, professor, funcionário e turma; não usar select nativo gigante
 - [ ] Salvar último ano letivo/turma/filtros do usuário quando aplicável
@@ -501,18 +501,18 @@
 
 ### Matrículas / Secretaria Escolar
 - [x] Nova matrícula integrada a aluno, responsável, endereço e turma
-- [ ] Tela de busca de matrículas com filtros: ano letivo, ensino, ano/série, situação e nome
-- [ ] Tela de intenção de vaga com filtros: ano letivo, ensino, ano/série, situação e busca
-- [ ] Cadastro de nova intenção de vaga com dados do estudante, responsável, endereço, escola atual/origem e série pretendida
-- [ ] Workflow de homologação de intenção de vaga: homologado, exceção, pendente, cancelado e encaminhado
-- [ ] Controle "matriculado em outro colégio?" com destaque visual e histórico de encaminhamento
-- [ ] Ações por intenção de vaga: etiquetar/classificar, encaminhar, imprimir, cancelar e auditar
-- [ ] Conversão de intenção de vaga homologada em matrícula, preservando histórico e documentos
-- [ ] Fluxo de deferimento/indeferimento de matrícula com motivo e auditoria
-- [ ] Histórico de situação da matrícula: solicitada, deferida, ativa, transferida, evadida, cancelada, concluída
-- [ ] Controle de movimentação escolar: transferência, evasão, remanejamento, retorno e justificativa
+- [x] Tela de busca de matrículas com filtros: ano letivo, ensino, ano/série, situação e nome
+- [x] Tela de intenção de vaga com filtros: ano letivo, ensino, ano/série, situação e busca
+- [x] Cadastro de nova intenção de vaga com dados do estudante, responsável, endereço, escola atual/origem e série pretendida
+- [x] Workflow de homologação de intenção de vaga: homologado, exceção, pendente, cancelado e encaminhado
+- [x] Controle "matriculado em outro colégio?" com destaque visual e histórico de encaminhamento
+- [x] Ações por intenção de vaga: etiquetar/classificar (badge de situação), encaminhar, imprimir, cancelar e auditar
+- [x] Conversão de intenção de vaga homologada em matrícula, preservando histórico e documentos
+- [x] Fluxo de deferimento/indeferimento de matrícula com motivo e auditoria
+- [x] Histórico de situação da matrícula: solicitada, deferida, ativa, transferida, evadida, cancelada, concluída
+- [x] Controle de movimentação escolar: transferência, evasão, remanejamento, retorno e justificativa
 - [ ] Justificativa de alunos evadidos com documento/anexo e responsável pela decisão
-- [ ] Geração de declaração de matrícula e documentos oficiais do aluno
+- [x] Geração de declaração de matrícula e documentos oficiais do aluno
 - [ ] Importação de fotos em lote por RA/matrícula
 - [ ] Carteirinha do aluno com foto, RA, turma, QR Code e validade
 - [ ] Inscrição ENEM/indicadores externos como campo/registro administrativo quando aplicável
@@ -767,13 +767,21 @@
   - [ ] `auditarAcaoCallable` — criado no código, deploy pendente
 
 ### Próximas prioridades imediatas:
-1. **🔴 Arquitetar Fase 12 antes de criar telas** — rotas, perfis, unidade escolar, models, índices, storage seguro e auditoria por módulo sensível
+1. ~~**🔴 Arquitetar Fase 12 antes de criar telas**~~ — Secretaria 12.2 entregue como primeira fatia: SearchPanel/DataActionTable/ModuleHub + workflow de intenção→matrícula + declaração PDF + rules + índices
 2. **🟠 Diário de Classe Avançado** — visão semanal, atribuição de horário, pendências, deferimento, fechamento e assinatura
-3. **🟠 Secretaria/Matrículas** — busca dedicada, deferimento, timeline de situação e movimentação escolar
-4. **🟠 Saúde/NDPD** — módulo separado, permissão própria, auditoria obrigatória e convênio médico estudante
-5. **🟡 Relatórios oficiais** — revalidar cálculos de notas/frequência e criar hub com carômetro, mapa de ausência, atas e documentos
-6. **🟡 Backfill operacional** — sincronizar `aluno_nome` e `aluno_ra` em matrículas antigas para professor enxergar registros legados
-7. **🟡 Limpar lint e criar smoke tests** — rotas principais, PDF/Excel e fluxos críticos
+3. **🟠 Saúde/NDPD** — módulo separado, permissão própria, auditoria obrigatória e convênio médico estudante
+4. **🟠 Auditoria Fase 9** — triggers obrigatórios pendentes (edição de presença 48h, reabertura de bimestre, conselho, mudança de perfil, inativação de aluno)
+5. **🟠 LGPD Fase 10** — mascaramento de CPF/telefone via Firestore Rules, URLs assinadas para Storage, retenção 5 anos, processo ANPD
+6. **🟡 Relatórios oficiais** — revalidar cálculos de notas/frequência e criar hub com carômetro, mapa de ausência, atas e documentos
+7. **🟡 Backfill operacional** — sincronizar `aluno_nome` e `aluno_ra` em matrículas antigas para professor enxergar registros legados
+8. **🟡 Limpar lint e criar smoke tests** — rotas principais, PDF/Excel e fluxos críticos
+
+### Bloco 2026-05-12 — Responsividade + Secretaria 12.2 (fatia 1)
+- [x] **Responsividade mobile:** drawer com body-lock + ESC, focus trap, foco devolvido, `inert` no `<main>` (`AppLayout.jsx`, `Sidebar.jsx`)
+- [x] **A11y:** focus-visible:ring em NavLinks, alvo tátil 44px no hambúrguer, role=dialog + aria-modal
+- [x] **Polimento pt-BR/contraste:** "Acoes"→"Ações", "modulo disponivel"→"módulo disponível", slate-400→500 em descrições, `<Link>` em rotas SPA
+- [x] **Fix bloqueante:** parser error em `SecretariaPage.jsx` (mistura `??` + `||`) e regex de diacríticos corrigida para `̀-ͯ`
+- [x] **Secretaria 12.2:** `services/intencoesVaga.js` com ciclo de vida + histórico + auditoria, `services/secretaria.js` com `Promise.allSettled` propagando erros por coleção e removendo `raw:dados`, modal de nova intenção (4 abas), modal de detalhe com timeline + workflow + conversão→matrícula, declaração de matrícula em PDF, regra Firestore para `intencoes_vaga` + ampliação de `matriculas` para admin/secretaria, índices compostos novos
 
 ### Fora do checklist original — pendências encontradas em 11/05/2026
 - [x] Centralizar a matriz `MODULOS_POR_PERFIL` para não duplicar em `Sidebar.jsx` e `PrivateRoute.jsx`

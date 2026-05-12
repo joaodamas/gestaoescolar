@@ -1,9 +1,7 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { listarTurmas } from '../../services/turmas'
-import { alunoResumoDaMatricula, listarMatriculasDaTurma } from '../../services/matriculas'
-import { salvarChamada, buscarChamadaDoDia, historicoChamadas } from '../../services/presencas'
-import { verificarDiaLetivo } from '../../services/calendario'
+import { usePresenca } from '../../hooks/usePresenca'
 import { CheckCircle2, XCircle, Clock, Save, AlertTriangle, CalendarDays, Info, History, X } from 'lucide-react'
 
 const hoje = () => new Date().toISOString().split('T')[0]
@@ -21,18 +19,28 @@ export default function ChamadaPage() {
   const [turmas, setTurmas]       = useState([])
   const [turmaSel, setTurmaSel]   = useState('')
   const [data, setData]           = useState(hoje())
-  const [alunos, setAlunos]       = useState([])
-  const [chamada, setChamada]     = useState({}) // { alunoId: { status, justificativa } }
-  const [jaExiste, setJaExiste]   = useState(false)
-  const [bloqueada, setBloqueada] = useState(false)
-  const [salvando, setSalvando]   = useState(false)
   const [sucesso, setSucesso]     = useState(false)
-  const [carregando, setCarregando] = useState(false)
-  const [statusCalendario, setStatusCalendario] = useState(null)
   const [historicoAberto, setHistoricoAberto] = useState(false)
   const [historico, setHistorico] = useState([])
   const [carregandoHistorico, setCarregandoHistorico] = useState(false)
-  const [erro, setErro] = useState('')
+
+  const {
+    alunos,
+    presencas: chamada,
+    carregando,
+    erro,
+    setErro,
+    chamadaExistente: jaExiste,
+    diaLetivo: statusCalendario,
+    bloqueada48h: bloqueada,
+    salvando,
+    contagem,
+    marcarPresenca,
+    salvar: salvarChamadaHook,
+    carregarHistorico,
+  } = usePresenca({ turmaId: turmaSel, data, professorId: user?.uid })
+
+  const { presentes, ausentes, justificados } = contagem
 
   // Carrega turmas (professor vê só as suas)
   useEffect(() => {
@@ -44,57 +52,8 @@ export default function ChamadaPage() {
     })
   }, [])
 
-  // Carrega alunos da turma quando turma ou data muda
-  useEffect(() => {
-    if (!turmaSel) return
-    setCarregando(true)
-    setSucesso(false)
-
-    async function carregar() {
-      // Verifica se a data é dia letivo no /calendario
-      const statusCal = await verificarDiaLetivo(data, new Date().getFullYear())
-      setStatusCalendario(statusCal)
-
-      const matriculas = await listarMatriculasDaTurma(turmaSel, new Date().getFullYear())
-      const lista = matriculas
-        .map(alunoResumoDaMatricula)
-        .sort((a, b) => a.nome_completo.localeCompare(b.nome_completo, 'pt-BR'))
-      setAlunos(lista)
-
-      // Verifica se chamada do dia já existe
-      const chamadaExistente = await buscarChamadaDoDia(turmaSel, data)
-      if (chamadaExistente.length > 0) {
-        setJaExiste(true)
-        // Verifica se está bloqueada (48h)
-        const sample = chamadaExistente[0]
-        const editavel = sample.editavel_ate?.toDate?.()
-        setBloqueada(editavel ? editavel < new Date() : false)
-        // Preenche estado com o que já existe
-        const estado = {}
-        chamadaExistente.forEach(p => {
-          estado[p.aluno_id] = { status: p.status, justificativa: p.justificativa ?? '' }
-        })
-        setChamada(estado)
-      } else {
-        setJaExiste(false)
-        setBloqueada(false)
-        // Pré-preenche todos como presentes
-        const estado = {}
-        lista.forEach(a => { estado[a.id] = { status: 'presente', justificativa: '' } })
-        setChamada(estado)
-      }
-
-      setCarregando(false)
-    }
-
-    carregar().catch(err => {
-      console.error(err)
-      setErro('Erro ao carregar chamada. Verifique permissões/índices.')
-      setAlunos([])
-      setChamada({})
-      setCarregando(false)
-    })
-  }, [turmaSel, data])
+  // Reset de feedback ao trocar filtros
+  useEffect(() => { setSucesso(false) }, [turmaSel, data])
 
   async function abrirHistorico() {
     if (!turmaSel) return
@@ -102,7 +61,7 @@ export default function ChamadaPage() {
     setCarregandoHistorico(true)
     setErro('')
     try {
-      const lista = await historicoChamadas(turmaSel, 12)
+      const lista = await carregarHistorico(12)
       setHistorico(lista)
     } catch (err) {
       console.error(err)
@@ -114,52 +73,21 @@ export default function ChamadaPage() {
   }
 
   function marcar(alunoId, status) {
-    if (bloqueada) return
-    setChamada(prev => ({
-      ...prev,
-      [alunoId]: { status, justificativa: status !== 'justificado' ? '' : (prev[alunoId]?.justificativa ?? '') }
-    }))
+    marcarPresenca(alunoId, status, chamada[alunoId]?.justificativa)
   }
 
   async function salvar() {
-    const invalido = alunos.find(a => {
-      const c = chamada[a.id]
-      return c?.status === 'justificado' && (!c.justificativa || c.justificativa.length < 10)
-    })
-    if (invalido) {
-      alert(`Justificativa obrigatória (mínimo 10 caracteres) para: ${invalido.nome_completo}`)
+    const result = await salvarChamadaHook()
+    if (!result.ok) {
+      if (result.motivo === 'justificativa_curta') {
+        alert(`Justificativa obrigatória (mínimo 10 caracteres) para: ${result.aluno?.nome_completo}`)
+      } else if (result.motivo === 'erro_salvar') {
+        alert('Erro ao salvar. Tente novamente.')
+      }
       return
     }
-    setSalvando(true)
-    try {
-      const entradas = alunos.map(a => ({
-        alunoId: a.id,
-        matriculaId: a.matriculaId,
-        turmaId: turmaSel,
-        data,
-        status: chamada[a.id]?.status ?? 'presente',
-        justificativa: chamada[a.id]?.justificativa ?? '',
-      }))
-      await salvarChamada(entradas, user.uid)
-      setJaExiste(true)
-      setSucesso(true)
-    } catch (err) {
-      alert('Erro ao salvar. Tente novamente.')
-      console.error(err)
-    } finally {
-      setSalvando(false)
-    }
+    setSucesso(true)
   }
-
-  const { presentes, ausentes, justificados } = useMemo(() => {
-    let p = 0, a = 0, j = 0
-    Object.values(chamada).forEach(c => {
-      if (c.status === 'presente') p++
-      else if (c.status === 'ausente') a++
-      else if (c.status === 'justificado') j++
-    })
-    return { presentes: p, ausentes: a, justificados: j }
-  }, [chamada])
 
   return (
     <div className="p-6 space-y-5">
@@ -285,10 +213,7 @@ export default function ChamadaPage() {
                       {c.status === 'justificado' && (
                         <input
                           value={c.justificativa}
-                          onChange={e => setChamada(prev => ({
-                            ...prev,
-                            [aluno.id]: { ...prev[aluno.id], justificativa: e.target.value }
-                          }))}
+                          onChange={e => marcarPresenca(aluno.id, 'justificado', e.target.value)}
                           placeholder="Motivo (mín. 10 caracteres)"
                           className="text-sm border border-amber-200 rounded-lg px-3 py-1.5 w-60 focus:outline-none focus:ring-2 focus:ring-amber-400 bg-amber-50"
                         />
