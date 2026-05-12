@@ -171,7 +171,7 @@ exports.auditarAcaoCallable = onCall({ region: 'southamerica-east1' }, async (re
     throw new Error('Usuário não autenticado.')
   }
   const {
-    usuarioId, perfil, acao, modulo, entidade, entidadeId,
+    acao, modulo, entidade, entidadeId,
     valorAnterior, valorNovo, motivo,
   } = req.data ?? {}
 
@@ -183,19 +183,16 @@ exports.auditarAcaoCallable = onCall({ region: 'southamerica-east1' }, async (re
             ?? req.rawRequest?.ip
             ?? null
 
-  // Perfil: usa o enviado pelo cliente, ou busca em /usuarios para garantir precisão
-  let perfilFinal = perfil ?? 'desconhecido'
-  if (!perfil) {
-    try {
-      const userDoc = await db.collection('usuarios').doc(req.auth.uid).get()
-      if (userDoc.exists) perfilFinal = userDoc.data().perfil ?? 'desconhecido'
-    } catch (err) {
-      console.warn('Falha ao buscar perfil para auditoria:', err?.message ?? err)
-    }
+  let perfilFinal = 'desconhecido'
+  try {
+    const userDoc = await db.collection('usuarios').doc(req.auth.uid).get()
+    if (userDoc.exists) perfilFinal = userDoc.data().perfil ?? 'desconhecido'
+  } catch (err) {
+    console.warn('Falha ao buscar perfil para auditoria:', err?.message ?? err)
   }
 
   const ref = await db.collection('auditoria').add({
-    usuario_id: usuarioId ?? req.auth.uid,
+    usuario_id: req.auth.uid,
     perfil: perfilFinal,
     acao,
     modulo,

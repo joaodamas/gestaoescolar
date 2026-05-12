@@ -62,7 +62,7 @@
 - [x] `TurmasPage`: erro callback via `observarTurmas(_, callback, errorCallback)`
 - [x] `services/turmas.js`: `observarTurmas` aceita errorCallback e chama success([]) para destravar UI
 - [x] `services/notificacoes.js`: error handler que retorna []
-- [ ] Aplicar mesmo padrão em todas as páginas restantes (Notas, Financeiro, Ocorrências, Projetos, Usuários)
+- [x] Aplicar mesmo padrão em todas as páginas restantes (Notas, Financeiro, Ocorrências, Projetos, Usuários)
 
 ### Firestore Security Rules
 - [x] Regras para `/usuarios` — próprio + Diretor lê, Admin/Diretor escreve
@@ -77,13 +77,16 @@
 - [x] Regras para `/indicadores` — todos leem (somente leitura), só Cloud Functions escrevem
 - [x] Regras para `/configuracoes` — todos leem, Diretor/Admin escrevem
 - [ ] Mascaramento de CPF e telefone diretamente nas regras do Firestore
+- [ ] **QA:** Resolver acesso seguro do professor a dados mínimos de alunos via `/matriculas` ou `/alunos_resumo`
+- [x] **QA:** Alinhar rules/UI do Financeiro: Admin cria, Diretor aprova, Admin não aprova
+- [x] **QA:** Separar `create/update/delete` em projetos e pendências; `allow delete: if false`
 
 ### Estrutura de Pastas
 - [x] Criar estrutura conforme documentação (`/components`, `/pages`, `/hooks`, `/services`, `/firebase`, `/utils`, `/context`)
 - [x] Setup React + Vite
 - [x] Setup Tailwind CSS
 - [x] Setup Recharts
-- [ ] Setup react-pdf ou jsPDF
+- [x] Setup react-pdf / @react-pdf/renderer
 - [x] Setup SheetJS (xlsx)
 
 ---
@@ -95,7 +98,7 @@
 - [x] Modelagem `/responsaveis`
 - [x] Modelagem `/matriculas` (com `ano_letivo`, `status`, `numero_matricula` auto-gerado)
 - [x] Modelagem `/turmas`
-- [ ] Modelagem `/disciplinas`
+- [x] Modelagem `/disciplinas`
 - [x] Modelagem `/calendario` + `services/calendario.js`
 
 ### Endereço com Auto-preenchimento por CEP 🔴 NOVO — CRÍTICO
@@ -119,8 +122,17 @@
 - [x] Botão "Editar" por card
 - [x] Botão "Arquivar" (soft delete — `ativa=false`)
 - [x] Contagem de alunos por turma via `/matriculas` ativas
-- [ ] Atribuição de múltiplos professores (`professores_ids` array)
-- [ ] Vincular disciplinas à turma
+- [x] Atribuição de múltiplos professores (`professores_ids` array)
+- [x] Vincular disciplinas à turma
+
+### Tela Gestão de Disciplinas 🔴 NOVO — CRÍTICO
+- [x] CRUD de disciplinas por turma e ano letivo
+- [x] Filtros por turma, professor, ano letivo e status
+- [x] Vincular professor responsável à disciplina
+- [x] Soft delete via `ativa=false`
+- [x] Error callback em `onSnapshot` para evitar loading infinito
+- [x] Índices compostos adicionais para filtros da tela
+- [x] Suporte a múltiplos professores por disciplina/turma
 
 ### Tela Gestão de Alunos
 - [x] Listagem de alunos com status=ativo
@@ -128,9 +140,11 @@
 - [x] Barra de busca por nome
 - [x] Filtros: Turma / Status / Ano letivo
 - [x] Tabela: Nome | Matrícula | Turma | Presença % | Status | Ações
-- [ ] Botão "Exportar Lista" (Excel)
+- [x] Botão "Exportar Lista" (Excel)
 - [x] Modal expansivo "+ Nova Matrícula" com 3 abas: Aluno + Endereço + Responsável
   - [x] Aba Aluno: Nome, Data Nasc., **RA**, CPF, Sexo, Necessidades Especiais
+  - [x] Foto do aluno (URL ou upload para Storage)
+  - [x] Aba Saúde: deficiência/acessibilidade, doenças/condições, alergias, alergias alimentares, restrições alimentares, medicamentos, plano de saúde, contato de emergência e observações
   - [x] **RA (Registro do Aluno)** — campo identificador estadual, mostrado na tabela e perfil
   - [x] **Aba Endereço com auto-preenchimento por CEP (ViaCEP API)**
     - [x] Campo CEP com busca automática on-blur
@@ -139,7 +153,10 @@
   - [x] Aba Responsável: Nome, Parentesco, Telefone, Email, Consentimento LGPD
   - [x] Seleção de Turma e Ano Letivo
   - [x] Criar atomicamente: `/alunos` + `/responsaveis` + `/matriculas`
-- [ ] Botão "Ver Perfil" por aluno
+- [x] Botão "Ver Perfil" por aluno
+- [x] Botão "Editar" cadastro do aluno
+- [x] Modal de edição com dados pessoais, foto, saúde/acessibilidade e endereço
+- [x] Edição de responsável/matrícula a partir do cadastro do aluno
 
 ### Perfil do Aluno
 - [x] Modal expansivo com 5 abas (Dados / Histórico / Presença / Notas / Ocorrências)
@@ -152,7 +169,7 @@
 - [x] Aba Notas: tabela com situação por bimestre
 - [x] Aba Ocorrências: lista cronológica com gravidade colorida
 - [x] Click na linha da tabela de alunos abre o perfil
-- [ ] Exportação de dados individuais (PDF — LGPD) — botão presente, falta implementar
+- [x] Exportação de dados individuais (PDF — LGPD)
 
 ### Serviços
 - [x] `services/alunos.js`
@@ -174,7 +191,7 @@
 - [x] Campo obrigatório de justificativa para J (mín. 10 chars)
 - [x] Indicador: X presentes / Y ausentes / Z justificados
 - [x] Botão "Salvar Chamada" (batch write em `/presencas`)
-- [ ] Botão "Ver Histórico" de chamadas anteriores
+- [x] Botão "Ver Histórico" de chamadas anteriores
 - [x] Campos bloqueados após 48h (`editavel_ate`) — exibir "Solicitar edição ao Coordenador"
 - [x] Aviso visual se chamada já salva no dia
 - [ ] `hook/usePresenca.js`
@@ -196,10 +213,18 @@
 - [x] Bloqueio de edição para professor após fechar bimestre
 - [x] Reabertura só por Coordenador/Diretor (UI placeholder)
 - [x] Botão "Ver Boletim" por aluno (placeholder)
-- [ ] Campo `aprovado_conselho` para decisão colegiada
-- [ ] Nota de recuperação: `max(media_bimestral, nota_recuperacao)`
+- [x] Campo `aprovado_conselho` para decisão colegiada
+- [x] Nota de recuperação: `max(media_bimestral, nota_recuperacao)`
 - [ ] `hook/useNotas.js`
 - [x] `services/notas.js`
+
+### Calendário Escolar
+- [x] Tela de calendário mensal e lista de eventos
+- [x] CRUD de feriados, recessos, eventos e reposições
+- [x] Contagem de dias letivos
+- [x] Filtro por ano letivo e tipo
+- [x] Vinculação opcional de evento a uma turma específica
+- [x] Regras Firestore específicas para permitir edição apenas por perfis autorizados
 
 ### Cloud Functions — KPIs
 - [x] `recalcularIndicadores()` — callable + scheduled a cada 15 min
@@ -212,13 +237,13 @@
   - [x] `total_ocorrencias` por tipo
 
 ### Regras de Negócio — Presença
-- [ ] Alerta automático ao atingir 25% de faltas → `/notificacoes` para Coordenador
-- [ ] Frequência exclui feriados e recessos do `/calendario`
-- [ ] Falta justificada não conta para limite 25% mas conta na frequência real
+- [x] Alerta automático ao atingir 25% de faltas → `/notificacoes` para Coordenador
+- [x] Frequência exclui feriados e recessos do `/calendario`
+- [x] Falta justificada não conta para limite 25% mas conta na frequência real
 
 ### Regras de Negócio — Notas
-- [ ] Histórico de alterações: array `historico_alteracoes` em `/notas`
-- [ ] Recuperação final configurável em `/configuracoes`
+- [x] Histórico de alterações: array `historico_alteracoes` em `/notas`
+- [x] Recuperação final configurável em `/configuracoes`
 
 ---
 
@@ -273,7 +298,7 @@
 - [x] Card destacado com "Nossa Missão"
 - [x] Card com "Nossos Valores"
 - [x] Bloco "Juntos, fazemos a diferença"
-- [ ] Editáveis em `/configuracoes`
+- [x] Editáveis em `/configuracoes`
 
 ---
 
@@ -295,7 +320,7 @@
   - [x] Checkbox "Notificar responsável"
 - [x] Botão "Ver Detalhes"
 - [x] Botão "Marcar Resolvida"
-- [ ] Cloud Function: grava em `/auditoria` para ocorrências médicas e acidentes
+- [x] Cloud Function: grava em `/auditoria` para ocorrências médicas e acidentes
 - [x] `services/ocorrencias.js`
 
 ---
@@ -310,17 +335,17 @@
 - [x] Botão "+ Nova Receita" (modal)
 - [x] Botão "Aprovar" — visível SOMENTE para Diretor
 - [x] Botão "Ver Comprovante" (abre PDF do Storage)
-- [ ] Botão "Exportar Relatório" (PDF + Excel)
+- [x] Botão "Exportar Relatório" (PDF + Excel)
 - [x] Modal Nova Despesa:
   - [x] Campos: Categoria | Subcategoria | Valor | Descrição | Data | Centro de custo
   - [x] Upload de comprovante (obrigatório para despesas > R$500)
   - [x] Preview em tempo real: "Saldo após esta despesa: R$ X"
   - [x] Bloqueio se valor > saldo disponível
   - [x] Botão "Enviar para aprovação" (status=pendente)
-- [ ] Notificação automática para Diretor ao criar despesa pendente
+- [x] Notificação automática para Diretor ao criar despesa pendente
 - [x] Fluxo: Admin cria → status=pendente → Diretor aprova → status=aprovado
 - [x] Cloud Function atualiza `/indicadores` a cada despesa aprovada (onDespesaAprovada)
-- [ ] Alerta PDDE: 15 dias antes do prazo → `/notificacoes` para Diretor e Admin
+- [x] Alerta PDDE: 15 dias antes do prazo → `/notificacoes` para Diretor e Admin
 - [x] `services/financeiro.js`
 
 ---
@@ -332,8 +357,8 @@
 - [x] Card: Nome | Descrição | Categoria | Data fim | Indicador de sucesso
 - [x] Botão "+ Novo Projeto" (modal expansivo)
 - [x] Botão "Avançar →" no card (move para próxima coluna)
-- [ ] Drag & drop entre colunas
-- [ ] Modal de detalhes do projeto
+- [x] Drag & drop entre colunas
+- [x] Modal de detalhes do projeto
 
 ### Pendências
 - [x] Lista ordenada por `data_prazo`
@@ -348,27 +373,31 @@
 
 ## FASE 8 — Relatórios & Exportação 🟡 MÉDIA
 
-- [ ] Boletim por aluno (PDF) — Coord., Diretor
-- [ ] Diário de classe (PDF) — Professor, Coord.
-- [ ] Frequência por turma (PDF + Excel) — Coord., Diretor
-- [ ] Alunos em risco de reprovação (PDF + Excel) — Coord., Diretor
-- [ ] Faltas acima do limite 25% (PDF + Excel) — Coord., Diretor
-- [ ] Ocorrências por período (PDF + Excel) — Coord., Diretor
-- [ ] Orçamento por categoria (PDF + Excel) — Admin, Diretor
-- [ ] Prestação de contas PDDE (PDF) — Admin, Diretor
-- [ ] Evolução SAEB / indicadores (PDF) — Todos
-- [ ] Exportação de dados do aluno (PDF — LGPD) — Diretor
-- [ ] Auditoria de ações (Excel) — Diretor, Admin
-- [ ] Resumo gerencial mensal (PDF) — Diretor
+- [ ] **PARCIAL:** Boletim por aluno (PDF) — precisa validar cálculo com pesos, recuperação e conselho
+- [ ] **PARCIAL:** Diário de classe (PDF + Excel) — precisa recorte correto por bimestre/período e cálculo oficial
+- [ ] **PARCIAL:** Frequência por turma (PDF + Excel) — precisa filtrar por período/bimestre
+- [ ] **PARCIAL:** Alunos em risco de reprovação (PDF + Excel) — precisa consumir média oficial consolidada
+- [ ] **PARCIAL:** Faltas acima do limite 25% (PDF + Excel) — precisa validar regra de dias letivos/período
+- [x] Ocorrências por período (PDF + Excel) — Coord., Diretor
+- [x] Orçamento por categoria (PDF + Excel) — Admin, Diretor
+- [x] Prestação de contas PDDE (PDF) — Admin, Diretor
+- [x] Evolução SAEB / indicadores (PDF) — Todos
+- [x] Exportação de dados do aluno (PDF — LGPD) — Diretor
+- [x] Auditoria de ações (Excel) — Diretor, Admin
+- [x] Resumo gerencial mensal (PDF) — Diretor
 - [ ] Mascarar/omitir dados sensíveis conforme perfil do solicitante
-- [ ] `utils/exportPDF.js`
-- [ ] `utils/exportExcel.js`
+- [x] `utils/exportPDF.js`
+- [x] `utils/exportExcel.js`
+- [ ] Validar relatórios com dados reais de produção/homologação
+- [x] Code-splitting/lazy load para reduzir bundle após entrada de @react-pdf/xlsx
 
 ---
 
 ## FASE 9 — Auditoria 🟠 ALTA
 
 - [x] Cloud Function `auditarAcao()` — grava em `/auditoria` (helper interna)
+- [x] Cloud Function callable `auditarAcaoCallable` para auditoria iniciada pelo frontend
+- [x] **QA:** `auditarAcaoCallable` usa `req.auth.uid` e busca perfil no servidor, sem aceitar identidade do cliente
 - [x] **IMUTÁVEL:** Nenhum perfil pode criar, editar ou deletar registros de auditoria (Firestore Rules)
 - [ ] Triggers obrigatórios:
   - [x] Alteração de nota após fechamento (notifica Diretor) — onNotaAlteradaAposFechamento
@@ -399,12 +428,12 @@
 - [ ] Mascaramento de CPF: `***.***.***-**` via Firestore Rules (nunca expor inteiro)
 - [ ] Mascaramento de telefone via Firestore Rules
 - [x] Consentimento LGPD coletado na matrícula (`consentimento_lgpd`, `consentimento_data`)
-- [ ] Log de acesso a dados médicos em `/auditoria`
-- [ ] Soft delete em todos os módulos (status=inativo, nunca deletar fisicamente)
+- [x] Log de acesso a dados médicos em `/auditoria`
+- [x] Soft delete em todos os módulos (status=inativo, nunca deletar fisicamente)
 - [ ] Retenção de 5 anos para dados de alunos inativos
 - [ ] URLs temporárias assinadas para arquivos no Firebase Storage
-- [ ] Separação de ocorrências médicas (campo `tipo=medico`)
-- [ ] Exportação de dados individuais do aluno (LGPD — Diretor)
+- [x] Separação de ocorrências médicas (campo `tipo=medico`)
+- [x] Exportação de dados individuais do aluno (LGPD — Diretor)
 - [x] Campo `base_legal` em `/alunos`
 - [x] Campo `ip_consentimento` em `/usuarios`
 - [ ] Processo documentado de notificação de violação (ANPD)
@@ -420,10 +449,215 @@
 - [x] Regras de nota: pesos por tipo de avaliação
 - [x] Limite de valor para comprovante obrigatório (padrão R$500)
 - [x] Histórico SAEB dinâmico (alimenta o gráfico do Dashboard)
-- [ ] Upload de Logo (Firebase Storage)
-- [ ] Endereço completo (CEP, rua, número, cidade, estado)
-- [ ] Regras de recuperação final
-- [ ] Alerta PDDE: dias de antecedência (padrão 15)
+- [x] Upload de Logo (Firebase Storage)
+- [x] Endereço completo (CEP, rua, número, cidade, estado)
+- [x] Regras de recuperação final
+- [x] Alerta PDDE: dias de antecedência (padrão 15)
+
+---
+
+## FASE 12 — Implantação de Funcionalidades do SisEduc Atual 🟠 ALTA
+> Referência visual: telas do SisEduc capturadas em 12/05/2026. Objetivo: migrar os fluxos úteis para uma experiência mais profissional, integrada ao design atual, com menos menus profundos e mais painéis contextuais.
+
+### FASE 12.0 — Arquitetura de Execução Antes das Telas 🔴 CRÍTICO
+- [ ] Criar mapa de módulos/rotas do novo escopo SisEduc antes de implementar telas
+- [ ] Adicionar rotas agrupadas: `/secretaria`, `/diario`, `/saude`, `/nutricao`, `/colegio`, `/paesp`, `/integracoes`, `/supervisao`
+- [ ] Definir modelo de dados inicial para: unidade escolar, matrículas avançadas, diário, saúde, nutrição, documentos, funcionários e PAESP
+- [ ] Revisar `MODULOS_POR_PERFIL` para novos módulos e submódulos
+- [ ] Criar matriz de permissões por perfil operacional: Diretor, Coordenador, Professor, Secretaria, Supervisor, NDPD/Saúde, Nutrição, Transporte e Admin
+- [ ] Definir política de auditoria por módulo sensível antes de criar telas de Saúde, Documentos e Diário
+- [ ] Definir padrões de Storage seguro para documentos/anexos antes de upload em Saúde, Documentos e Funcionários
+- [ ] Criar plano de índices Firestore para filtros densos de secretaria, diário, relatórios e saúde
+
+### FASE 12.1 — Contexto Escolar / Unidade 🟠 ALTA
+- [ ] Criar seletor de escola/unidade atual inspirado em "Você está acessando"
+- [ ] Persistir `escola_id`/`unidade_id` nos principais documentos
+- [ ] Filtrar todas as queries por escola/unidade ativa
+- [ ] Atualizar Firestore Rules para impedir acesso cruzado entre unidades
+- [ ] Permitir usuário vinculado a múltiplas unidades
+
+### Diretriz de Produto / UX
+- [ ] Consolidar o menu legado em áreas claras: Secretaria, Pedagógico, Saúde, Nutrição, Relatórios, Gestão Escolar, Integrações e Administração
+- [ ] Evitar replicar o menu profundo do SisEduc; usar hubs por módulo com cards de ações, filtros salvos e atalhos recentes
+- [ ] Padronizar telas de busca com: ano letivo, turma/série, situação/status, nome, RA, filtros avançados e ações de exportação
+- [ ] Criar componente reutilizável `SearchPanel` para filtros densos de secretaria e relatórios
+- [ ] Criar componente reutilizável `DataActionTable` com paginação, seleção, ações por linha, ícones com tooltip e exportação
+- [ ] Criar componente reutilizável `ModuleHub` para agrupar submódulos com cards compactos e indicadores
+- [ ] Padronizar estados vazios: nenhum resultado, sem permissão, sem configuração e erro de carregamento, sempre com ação recomendada
+- [ ] Criar autocomplete reutilizável para aluno, professor, funcionário e turma; não usar select nativo gigante
+- [ ] Salvar último ano letivo/turma/filtros do usuário quando aplicável
+- [ ] Criar breadcrumb/contexto de módulo para telas profundas
+- [ ] Criar busca global de módulos/telas
+- [ ] Criar política visual para integrações externas: abrir em nova aba, registrar auditoria e exibir aviso de ambiente externo
+
+### Dashboard / Visão Geral
+- [x] Card de Próximos Eventos no dashboard
+- [ ] Card/painel de Notificações institucionais com estado vazio profissional
+- [ ] Blocos de plataformas externas: Educação Modelo, Saúde na Escola, Centro de Mídias e Site do Colégio
+- [ ] Cards gerenciais inspirados no SisEduc: alunos sem RA, frequência inferior a 75%, níveis de escrita/leitura
+- [ ] Ação "Detalhes" nos cards críticos levando para relatórios filtrados
+- [ ] Ajustar dashboard para perfis: Diretor, Coordenador, Professor, Secretaria/Admin e Saúde/Nutrição
+
+### Matrículas / Secretaria Escolar
+- [x] Nova matrícula integrada a aluno, responsável, endereço e turma
+- [ ] Tela de busca de matrículas com filtros: ano letivo, ensino, ano/série, situação e nome
+- [ ] Tela de intenção de vaga com filtros: ano letivo, ensino, ano/série, situação e busca
+- [ ] Cadastro de nova intenção de vaga com dados do estudante, responsável, endereço, escola atual/origem e série pretendida
+- [ ] Workflow de homologação de intenção de vaga: homologado, exceção, pendente, cancelado e encaminhado
+- [ ] Controle "matriculado em outro colégio?" com destaque visual e histórico de encaminhamento
+- [ ] Ações por intenção de vaga: etiquetar/classificar, encaminhar, imprimir, cancelar e auditar
+- [ ] Conversão de intenção de vaga homologada em matrícula, preservando histórico e documentos
+- [ ] Fluxo de deferimento/indeferimento de matrícula com motivo e auditoria
+- [ ] Histórico de situação da matrícula: solicitada, deferida, ativa, transferida, evadida, cancelada, concluída
+- [ ] Controle de movimentação escolar: transferência, evasão, remanejamento, retorno e justificativa
+- [ ] Justificativa de alunos evadidos com documento/anexo e responsável pela decisão
+- [ ] Geração de declaração de matrícula e documentos oficiais do aluno
+- [ ] Importação de fotos em lote por RA/matrícula
+- [ ] Carteirinha do aluno com foto, RA, turma, QR Code e validade
+- [ ] Inscrição ENEM/indicadores externos como campo/registro administrativo quando aplicável
+
+### Alunos / Documentos / Autorizações
+- [x] Cadastro do aluno com foto, saúde, deficiência, doenças, alergias e restrições
+- [ ] Relação de alunos por turma/classe com filtros e exportação PDF/Excel
+- [ ] Mapa de ausência por turma, período e aluno
+- [ ] Registro de entrada e saída de alunos com responsável/autorizado, horário e motivo
+- [ ] Conselho de aluno: registros de decisões, encaminhamentos e responsáveis
+- [ ] Termo de consentimento livre e esclarecido
+- [ ] Termo de autorização de vacinação
+- [ ] Termo de inquérito epidemiológico / saúde bucal
+- [ ] Encaminhamento de pronto atendimento
+- [ ] Ficha PAEB / ficha de acompanhamento pedagógico do aluno
+- [ ] Ficha de rendimento
+- [ ] Ficha de observação
+- [ ] Ficha de acompanhamento da educação infantil
+- [ ] Ficha de levantamento socioeconômico-cultural
+- [ ] Quadro de visitas e quadro de rotina
+
+### Diário de Classe Avançado
+- [x] Chamada diária
+- [x] Lançamento de notas
+- [ ] Tela "Diário de Classe - Lançamento" com visão por professor, turma e dias da semana
+- [ ] Visão semanal do professor com abas: Todos, 2ª, 3ª, 4ª, 5ª e 6ª feira
+- [ ] Atribuição de sala/turma ao professor para liberar lançamentos
+- [ ] Pendências do diário: chamadas não realizadas, notas incompletas, bimestres não fechados
+- [ ] Deferimento/aprovação de lançamentos pelo coordenador/diretor
+- [ ] Fechamento de diário com assinatura/histórico para assinar
+- [ ] Reabertura de diário com motivo obrigatório e auditoria
+- [ ] Diário de classe detalhado por professor/aluno para consulta de gestão
+
+### Quadro Escolar / Turmas / Salas
+- [x] Gestão de turmas
+- [x] Gestão de disciplinas
+- [ ] Tela de Quadro Escolar com lista tabular de salas regulares e salas PAC
+- [ ] Campos de turma: código externo/Prodesp, ensino, período, sala, capacidade e tipo de atendimento
+- [ ] Colunas por turno no Quadro Escolar: manhã, tarde e noite
+- [ ] Indicadores por turma/turno: A.P., A.E., total, AEE, matriculados, capacidade e vagas
+- [ ] Cálculo automático de vagas: capacidade - matriculados, com alerta para superlotação
+- [ ] Totais por turno e total geral de alunos/salas ao final da tabela
+- [ ] Resumo superior: quantidade de salas físicas, salas ocupadas e salas disponíveis
+- [ ] Abas do Quadro Escolar: Resumo, Encaminhamentos, Configuração de Turnos e visualização definitiva/rascunho
+- [ ] Botão "Gerar PDF" do Quadro Escolar com cabeçalho oficial e filtros aplicados
+- [ ] Ações por turma: professores, alunos, atribuir professor, editar, sincronizar/atualizar classe
+- [ ] Atualização/importação de classes por ano letivo a partir de base externa
+- [ ] Gestão de sala de aula física: número, capacidade, turno, acessibilidade e status
+- [ ] Períodos escolares: bimestres, semestres, datas de fechamento, datas de conselho e bloqueios
+- [ ] Tratar AEE/PAC como tipo de atendimento/sala, sem misturar com turmas regulares
+
+### Funcionários / Professores / Atribuição
+- [x] Gestão básica de usuários
+- [ ] Cadastro/consulta de funcionários por nome, prontuário e status ativo
+- [ ] Associação de funcionário ao colégio/unidade
+- [ ] Cadastro de prontuário, vínculo, função, cargo e lotação
+- [ ] Atribuição de horário do professor por turma, disciplina e dia da semana
+- [ ] Atribuição de salas pelo coordenador
+- [ ] Aulas observadas: registro de observação, devolutiva e plano de ação
+- [ ] Ficha de acompanhamento do estudante vinculada ao professor
+- [ ] Declaração de acúmulo de cargo para funcionário/professor
+
+### Saúde na Escola / NDPD
+- [ ] Módulo Saúde na Escola como área própria, separada dos dados sensíveis do cadastro do aluno
+- [ ] Convênio médico estudante: busca por ano, sala, CID, estudante e RA
+- [ ] Cadastro de atendimento/convênio com CID, data, profissional, encaminhamento e anexos
+- [ ] Projeto Águia e Projeto Águia Gestão
+- [ ] Ficha de atividade coletiva
+- [ ] Marcadores de consumo / respostas
+- [ ] Controle de acesso restrito por perfil para dados de saúde
+- [ ] Auditoria obrigatória para leitura, criação e alteração de registros de saúde
+
+### Nutrição
+- [ ] Módulo Nutrição com cardápio por período/turma
+- [ ] Relatório de inspeção de alimentação escolar
+- [ ] Registro de restrições alimentares integrado ao cadastro do aluno
+- [ ] Indicadores de alunos com alergias/restrições para equipe autorizada
+
+### Relatórios Oficiais / Formulários
+- [x] Relatórios principais em PDF/Excel
+- [ ] Hub de relatórios oficiais por categoria: Alunos, Diário, Saúde, Gerenciais, PAESP, Formulários e Colégio
+- [ ] Atas
+- [ ] Boletins oficiais por turma/aluno
+- [ ] Carômetro com fotos por turma
+- [ ] Lista de alunos
+- [ ] Relação de alunos por classe
+- [ ] Mapa de ausência
+- [ ] Entrada e saída de alunos
+- [ ] Quadro administrativo
+- [ ] Relatório de acompanhamento pedagógico/NDPD
+- [ ] Desempenho por sala de aula
+- [ ] Nível de escrita
+- [ ] Nível de SND
+- [ ] Níveis de leitura
+- [ ] Levantamento de visitas
+- [ ] Planejamento: movimentação escolar
+- [ ] Planejamento: alunos evadidos com justificativa
+- [ ] Formulário de encaminhamento para psicopedagogo
+- [ ] Formulário/ficha de rendimento
+- [ ] Formulário/ficha de observação
+- [ ] Formulário/ficha de acompanhamento do ensino infantil
+- [ ] Formulário de leite materno na creche
+- [ ] Formulário de levantamento socioeconômico-cultural
+- [ ] Declaração de acúmulo de cargo
+- [ ] Exportação com cabeçalho oficial da escola e controle de quem gerou
+
+### PAESP / Avaliações Externas
+- [ ] Módulo PAESP com navegação própria
+- [ ] Dashboard TRI com velocímetro percentual e gráfico comparativo por faixa
+- [ ] TRI por escola e por turma, alternando visualização com radio/segmentado
+- [ ] TRI Matemática, TRI Língua Portuguesa e TRI Geral
+- [ ] Classificação por faixas: Insuficiente, Básico, Proficiente e Avançado
+- [ ] Comparativo escola/turma versus rede de ensino
+- [ ] Ranking/listagem com pontuação, medalha/destaque e ação de detalhes
+- [ ] Habilidades
+- [ ] Evolução
+- [ ] Provas
+- [ ] Respostas
+- [ ] Consolidado
+- [ ] Indicadores por turma, habilidade, componente e período
+- [ ] Importação de planilhas/resultados externos
+- [ ] Histórico por avaliação/ano para comparação evolutiva
+- [ ] Exportação PDF/Excel dos indicadores PAESP
+
+### Colégio / Administração da Unidade
+- [x] Configurações da escola com dados básicos
+- [ ] Informações institucionais do colégio em página consultável
+- [ ] Calendário de eventos institucional vinculado ao dashboard
+- [ ] Documentos do colégio com categorias, anexos e controle de validade
+- [ ] Funcionários da unidade
+- [ ] Cadastro do colégio ampliado: endereço, contatos, códigos externos, equipe gestora e horários
+- [ ] Transporte escolar: cadastro, alunos atendidos, rota, veículo, motorista e relatórios
+
+### Integrações Externas
+- [ ] G Suite / Google Workspace: gerenciar e-mails, status e informações
+- [ ] Links oficiais configuráveis para Educação Modelo, Saúde na Escola, Centro de Mídias e site do colégio
+- [ ] Registro de acesso a integrações externas em auditoria
+- [ ] Permissões por perfil para integrações
+
+### Permissões e Perfis Inspirados no SisEduc
+- [ ] Revisar matriz de perfis para papéis adicionais: Secretaria, Supervisor, NDPD/Saúde, Nutrição e Transporte
+- [ ] Diretor: liberar lançamento do diário e históricos para assinar
+- [ ] Coordenador: atribuição de salas, aulas observadas e acompanhamento pedagógico
+- [ ] Supervisor/NDPD: relatórios e acompanhamento pedagógico restrito
+- [ ] Professor: atribuição de horário, diário, ficha de acompanhamento e consultas permitidas
+- [ ] Secretaria/Admin: matrícula, aluno, funcionário, documentos, transporte e cadastros
 
 ---
 
@@ -437,9 +671,9 @@
 - [x] `Card` / `CardHeader` / `CardBody` / `KpiCard` / `Badge` / `EmptyState` / `Spinner`
 - [x] `PageHeader` (título + descrição + ícone + ações)
 - [x] Tema base com Tailwind v4 + animações
-- [ ] `Toast` para feedback de ações (success / error / info)
-- [ ] `Tabs` reutilizável
-- [ ] `Avatar` com fallback de iniciais
+- [x] `Toast` para feedback de ações (success / error / info)
+- [x] `Tabs` reutilizável
+- [x] `Avatar` com fallback de iniciais
 
 ### Notificações
 - [x] Coleção `/notificacoes` e modelo de dados
@@ -452,8 +686,8 @@
 - [x] Realtime via `onSnapshot`
 - [x] Cloud Function `alertarPrazos()` — pendências ≤ 7 dias
 - [x] Cloud Function `onPresencaSalva` — faltas ≥ 25%
-- [ ] Cloud Function monitora ocorrências graves
-- [ ] Cloud Function monitora despesas pendentes de aprovação
+- [x] Cloud Function monitora ocorrências graves
+- [x] Cloud Function monitora despesas pendentes de aprovação
 
 ### Gestão de Usuários (Diretor/Admin) 🟠 ALTA
 - [x] Tela de listagem de usuários por perfil com cards de contagem
@@ -474,8 +708,8 @@
 - [x] Campo: orcamento_previsto, limite_comprovante
 - [x] Campo: saeb_historico (map ano→nota — input dinâmico)
 - [x] Campo: regras_nota (pesos por tipo de avaliação)
-- [ ] Upload de logo_url (Firebase Storage)
-- [ ] Endereço completo (CEP, rua, cidade, estado)
+- [x] Upload de logo_url (Firebase Storage)
+- [x] Endereço completo (CEP, rua, cidade, estado)
 
 ---
 
@@ -507,9 +741,9 @@
 🟠 FASE 5 → Ocorrências                       ✅ Tela + service + filtro por perfil
 🟡 FASE 6 → Financeiro                        ✅ Tela + service + Cloud Function de aprovação
 🟡 FASE 7 → Projetos & Pendências             ✅ Kanban + lista de pendências
-🟠 FASE 9 → Auditoria                         🔄 4/10 triggers ativos (UI faltando)
+🟠 FASE 9 → Auditoria                         🔄 UI pronta, triggers/auditorias obrigatórias pendentes
 🟠 FASE 10 → LGPD                             🔄 Consentimento + mascaramento (Storage URLs faltando)
-🟡 FASE 8 → Relatórios                        ⏳ Pendente (utils PDF/Excel + 12 relatórios)
+🟡 FASE 8 → Relatórios                        🔄 Base pronta + Boletim/Diário implementados
 🟢 FASE 11 → Configurações                    ✅ Tela completa + edição em tempo real
 🟠 EXTRA → Gestão de Usuários                ✅ CRUD + multi-vínculo de turmas
 🟠 EXTRA → Sino de Notificações              ✅ Realtime + marcar lida/todas
@@ -529,17 +763,27 @@
   - [x] `onPresencaSalva` (trigger Firestore — alerta 25% faltas)
   - [x] `onDespesaAprovada` (trigger Firestore — recalcula + auditoria)
   - [x] `onNotaAlteradaAposFechamento` (trigger Firestore — auditoria)
+  - [ ] `auditarAcaoCallable` — criado no código, deploy pendente
 
 ### Próximas prioridades imediatas:
-1. **🟠 Tela de Auditoria** — `/auditoria` populada por CF, falta UI com filtros
-2. **🟠 utils/exportPDF + utils/exportExcel** — base para todos os relatórios
-3. **🟠 CRUD de Disciplinas** — bloqueia notas por disciplina
-4. **🟠 Tela de Calendário** (UI) — cadastrar feriados/recessos visualmente
-5. **🟠 Aplicar error handlers em todas as páginas restantes**
-6. **🟡 Boletim por aluno + Diário de classe** (PDF) — relatórios mais críticos
-7. **🟡 Drag & drop no Kanban de Projetos**
-8. **🟢 Toast notifications + Avatar component**
-9. **🟢 Upload de Logo da escola (Storage)**
+1. **🔴 Corrigir permissões/modelagem do professor** — criar caminho seguro via `/matriculas` ou `/alunos_resumo` para Chamada, Notas, Diário e Relatórios
+2. **🔴 Corrigir rules críticas apontadas pelo QA** — Financeiro Admin cria/Diretor aprova, soft delete em projetos/pendências e callable de auditoria sem identidade enviada pelo cliente
+3. **🔴 Arquitetar Fase 12 antes de criar telas** — rotas, perfis, unidade escolar, models, índices, storage seguro e auditoria por módulo sensível
+4. **🟠 Diário de Classe Avançado** — visão semanal, atribuição de horário, pendências, deferimento, fechamento e assinatura
+5. **🟠 Secretaria/Matrículas** — busca dedicada, deferimento, timeline de situação e movimentação escolar
+6. **🟠 Saúde/NDPD** — módulo separado, permissão própria, auditoria obrigatória e convênio médico estudante
+7. **🟡 Relatórios oficiais** — revalidar cálculos de notas/frequência e criar hub com carômetro, mapa de ausência, atas e documentos
+8. **🟡 Limpar lint e criar smoke tests** — rotas principais, PDF/Excel e fluxos críticos
+
+### Fora do checklist original — pendências encontradas em 11/05/2026
+- [x] Centralizar a matriz `MODULOS_POR_PERFIL` para não duplicar em `Sidebar.jsx` e `PrivateRoute.jsx`
+- [x] Revisar permissões reais de professor para disciplinas/relatórios: menu não mostra Disciplinas, mas Notas depende delas
+- [x] Revisar performance do bundle: build principal reduzido com lazy loading; chunk pesado de PDF isolado
+- [x] Implementar lazy loading das páginas pesadas (`Relatorios`, `Financeiro`, dashboards com gráficos)
+- [x] Mapear funcionalidades do SisEduc atual a partir das telas de referência
+- [x] Adicionar Fase 12 com backlog de implantação SisEduc melhorada
+- [ ] Criar testes mínimos de smoke para rotas principais e geração de PDF/Excel
+- [ ] Confirmar deploy dos novos índices e da nova callable antes de homologar
 
 > **Atenção:** Auditoria e LGPD foram movidos para antes de Ocorrências e Financeiro porque o sistema armazena dados de menores de idade — a conformidade é obrigatória desde o início, não pode ser deixada para o final.
 

@@ -35,7 +35,7 @@ const MES_ATUAL = new Date().getMonth() + 1
 // Perfis com acesso ao módulo financeiro
 const PERFIS_PERMITIDOS = ['admin', 'diretor']
 const PODE_APROVAR = ['diretor']
-const PODE_CRIAR   = ['admin', 'diretor']
+const PODE_CRIAR   = ['admin']
 
 // ─── Utilitários de formatação ────────────────────────────────────────────────
 
@@ -390,6 +390,7 @@ export default function FinanceiroPage() {
   }
 
   async function handleCancelar(id) {
+    if (!PODE_APROVAR.includes(perfil.perfil)) return
     if (!window.confirm('Deseja cancelar este lançamento?')) return
     setAcao({ id, tipo: 'cancelando' })
     try {
@@ -744,8 +745,8 @@ export default function FinanceiroPage() {
                             </button>
                           )}
 
-                          {/* Botão Cancelar — apenas status pendente */}
-                          {l.status === 'pendente' && (
+                          {/* Botão Cancelar — apenas Diretor e status pendente */}
+                          {podeAprovar && l.status === 'pendente' && (
                             <button
                               onClick={() => handleCancelar(l.id)}
                               disabled={emAcao}

@@ -184,20 +184,41 @@ service cloud.firestore {
     match /financeiro_lancamentos/{lancId} {
       allow read:   if isAtivo() && isAnyOf(['diretor', 'admin']);
       allow create: if isAtivo() && isPerfil('admin');
-      allow update: if isAtivo() && isAnyOf(['diretor', 'admin']);
+      allow update: if isAtivo() && (
+        (
+          isPerfil('admin')
+          && request.resource.data.status == resource.data.status
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['comprovante_url'])
+        )
+        || (
+          isPerfil('diretor')
+          && resource.data.status == 'pendente'
+          && request.resource.data.status in ['aprovado', 'cancelado']
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'status',
+            'aprovado_por',
+            'aprovado_em',
+            'cancelado_em'
+          ])
+        )
+      );
       allow delete: if false;
     }
 
     // ── /projetos ────────────────────────────────────────────────────────
     match /projetos/{projId} {
       allow read:  if isAtivo() && isAnyOf(['diretor', 'coordenador', 'admin']);
-      allow write: if isAtivo() && isAnyOf(['diretor', 'coordenador']);
+      allow create: if isAtivo() && isAnyOf(['diretor', 'coordenador']);
+      allow update: if isAtivo() && isAnyOf(['diretor', 'coordenador']);
+      allow delete: if false;
     }
 
     // ── /pendencias ──────────────────────────────────────────────────────
     match /pendencias/{pendId} {
       allow read:  if isAtivo() && isAnyOf(['diretor', 'coordenador', 'admin']);
-      allow write: if isAtivo() && isAnyOf(['diretor', 'coordenador', 'admin']);
+      allow create: if isAtivo() && isAnyOf(['diretor', 'coordenador', 'admin']);
+      allow update: if isAtivo() && isAnyOf(['diretor', 'coordenador', 'admin']);
+      allow delete: if false;
     }
 
     // ── /notificacoes ────────────────────────────────────────────────────
