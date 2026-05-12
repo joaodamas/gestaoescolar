@@ -15,7 +15,7 @@ import { verificarDiaLetivo } from '../services/calendario'
  *
  * NÃO altera comportamento da UI — apenas extrai a lógica de `ChamadaPage.jsx`.
  */
-export function usePresenca({ turmaId, data, professorId } = {}) {
+export function usePresenca({ turmaId, data, professorId, contexto = {} } = {}) {
   const [alunos, setAlunos] = useState([])
   const [presencas, setPresencas] = useState({}) // { [alunoId]: { status, justificativa } }
   const [carregando, setCarregando] = useState(false)
@@ -45,18 +45,18 @@ export function usePresenca({ turmaId, data, professorId } = {}) {
 
     async function carregar() {
       const ano = new Date().getFullYear()
-      const statusCal = await verificarDiaLetivo(data, ano)
+      const statusCal = await verificarDiaLetivo(data, ano, contexto)
       if (cancelado) return
       setDiaLetivo(statusCal)
 
-      const matriculas = await listarMatriculasDaTurma(turmaId, ano)
+      const matriculas = await listarMatriculasDaTurma(turmaId, ano, contexto)
       const lista = matriculas
         .map(alunoResumoDaMatricula)
         .sort((a, b) => a.nome_completo.localeCompare(b.nome_completo, 'pt-BR'))
       if (cancelado) return
       setAlunos(lista)
 
-      const existentes = await buscarChamadaDoDia(turmaId, data)
+      const existentes = await buscarChamadaDoDia(turmaId, data, contexto)
       if (cancelado) return
 
       if (existentes.length > 0) {
@@ -99,7 +99,7 @@ export function usePresenca({ turmaId, data, professorId } = {}) {
     return () => {
       cancelado = true
     }
-  }, [turmaId, data])
+  }, [turmaId, data, contexto])
 
   // pode_editar = não bloqueada por 48h
   const pode_editar = !bloqueada48h
@@ -158,7 +158,7 @@ export function usePresenca({ turmaId, data, professorId } = {}) {
         status: presencas[a.id]?.status ?? 'presente',
         justificativa: presencas[a.id]?.justificativa ?? '',
       }))
-      await salvarChamada(entradas, professorId)
+      await salvarChamada(entradas, professorId, contexto)
       setChamadaExistente(true)
       setSucesso(true)
       return { ok: true }
@@ -168,15 +168,15 @@ export function usePresenca({ turmaId, data, professorId } = {}) {
     } finally {
       setSalvando(false)
     }
-  }, [alunos, presencas, turmaId, data, professorId])
+  }, [alunos, presencas, turmaId, data, professorId, contexto])
 
   // Histórico opcional (mantido para a página re-utilizar)
   const carregarHistorico = useCallback(
     async (limite = 12) => {
       if (!turmaId) return []
-      return historicoChamadas(turmaId, limite)
+      return historicoChamadas(turmaId, limite, contexto)
     },
-    [turmaId],
+    [turmaId, contexto],
   )
 
   return {

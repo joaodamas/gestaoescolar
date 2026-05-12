@@ -4,6 +4,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '../firebase/firebase'
 import { auditarAcao } from './auditoria'
+import { comEscopoEscolar } from './escopo'
 
 const ANO_ATUAL = new Date().getFullYear()
 
@@ -51,7 +52,7 @@ export async function criarIntencaoVaga(dados, autor) {
   const anoLetivo = Number(dados.ano_letivo) || ANO_ATUAL
   const situacaoInicial = dados.situacao || 'em_analise'
 
-  const payload = {
+  const payload = comEscopoEscolar({
     protocolo: gerarProtocolo('IV', anoLetivo),
     ano_letivo: anoLetivo,
     situacao: situacaoInicial,
@@ -93,7 +94,7 @@ export async function criarIntencaoVaga(dados, autor) {
     created_by: autor?.uid ?? null,
     created_at: serverTimestamp(),
     updated_at: serverTimestamp(),
-  }
+  }, autor)
 
   const ref = await addDoc(collection(db, 'intencoes_vaga'), payload)
 
@@ -202,7 +203,7 @@ export async function converterIntencaoEmMatricula({ id, turmaId, turmaNome, aut
 
   const anoLetivo = Number(dados.ano_letivo) || ANO_ATUAL
 
-  const matriculaPayload = {
+  const matriculaPayload = comEscopoEscolar({
     ano_letivo: anoLetivo,
     turma_id: turmaId ?? '',
     turma_nome: turmaNome ?? '',
@@ -225,7 +226,7 @@ export async function converterIntencaoEmMatricula({ id, turmaId, turmaNome, aut
     data_matricula: new Date().toISOString().slice(0, 10),
     created_by: autor?.uid ?? null,
     created_at: serverTimestamp(),
-  }
+  }, dados)
 
   const refMatricula = await addDoc(collection(db, 'matriculas'), matriculaPayload)
 

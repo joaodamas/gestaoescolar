@@ -7,6 +7,80 @@ admin.initializeApp()
 const db = admin.firestore()
 
 const ANO_ATUAL = new Date().getFullYear()
+const REGION = 'southamerica-east1'
+const AUDITORIA_EXPORT_MAX_REGISTROS = 5000
+const AUDITORIA_EXPORT_PREVIEW_LIMITE = 20
+
+function limparUndefined(obj = {}) {
+  return Object.fromEntries(Object.entries(obj).filter(([, valor]) => valor !== undefined))
+}
+
+function isDataIso(valor) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(valor ?? '')
+}
+
+function parseDataFimExclusiva(dataFim) {
+  const data = new Date(`${dataFim}T00:00:00.000Z`)
+  data.setUTCDate(data.getUTCDate() + 1)
+  return data
+}
+
+function limitarTexto(valor, tamanho = 500) {
+  if (typeof valor !== 'string') return ''
+  return valor.trim().slice(0, tamanho)
+}
+
+function normalizarResumoDiario(resumo = {}) {
+  return {
+    total_alunos: Number(resumo.total_alunos ?? 0) || 0,
+    total_lancamentos: Number(resumo.total_lancamentos ?? 0) || 0,
+    pendencias: Number(resumo.pendencias ?? 0) || 0,
+    aulas_previstas: Number(resumo.aulas_previstas ?? 0) || 0,
+    aulas_lancadas: Number(resumo.aulas_lancadas ?? 0) || 0,
+  }
+}
+
+function montarWorkflowDiarioId({ anoLetivo, turmaId, disciplinaId, periodo, dataReferencia }) {
+  const dataBase = dataReferencia || 'sem-data'
+  return [
+    'fechamento',
+    String(anoLetivo),
+    turmaId,
+    disciplinaId,
+    periodo,
+    dataBase,
+  ].join('_')
+}
+
+async function carregarRegistrosAuditoriaParaExportacao(filtros = {}) {
+  let consulta = db.collection('auditoria')
+
+  if (filtros.dataInicio) {
+    consulta = consulta.where('created_at', '>=', new Date(`${filtros.dataInicio}T00:00:00.000Z`))
+  }
+  if (filtros.dataFim) {
+    consulta = consulta.where('created_at', '<', parseDataFimExclusiva(filtros.dataFim))
+  }
+
+  const snap = await consulta
+    .orderBy('created_at', 'desc')
+    .limit(AUDITORIA_EXPORT_MAX_REGISTROS + 1)
+    .get()
+
+  const filtrados = snap.docs.filter((doc) => {
+    const registro = doc.data()
+    if (filtros.modulo && registro.modulo !== filtros.modulo) return false
+    if (filtros.acao && registro.acao !== filtros.acao) return false
+    if (filtros.usuario_id && registro.usuario_id !== filtros.usuario_id) return false
+    return true
+  })
+
+  const truncado = filtrados.length > AUDITORIA_EXPORT_MAX_REGISTROS
+  return {
+    truncado,
+    docs: truncado ? filtrados.slice(0, AUDITORIA_EXPORT_MAX_REGISTROS) : filtrados,
+  }
+}
 
 // ── Helper: gravar em /auditoria (imutável) ────────────────────────────────
 async function auditarAcao({ usuarioId, perfil, acao, modulo, entidade, entidadeId, valorAnterior, valorNovo, motivo }) {
@@ -202,13 +276,13 @@ async function recalcular(ano) {
   return { ok: true, ano: anoLetivo, totalAlunos, presencaMedia, taxaAprovacao }
 }
 
-exports.recalcularIndicadoresCallable = onCall({ region: 'southamerica-east1' }, async (req) => {
+exports.recalcularIndicadoresCallable = onCall({ region: REGION }, async (req) => {
   return recalcular(req.data?.ano)
 })
 
 // ── auditarAcaoCallable — gravar em /auditoria a partir do frontend ────────
 // /auditoria tem regra `allow write: if false` — só Cloud Functions gravam.
-exports.auditarAcaoCallable = onCall({ region: 'southamerica-east1' }, async (req) => {
+exports.auditarAcaoCallable = onCall({ region: REGION }, async (req) => {
   if (!req.auth) {
     throw new Error('Usuário não autenticado.')
   }
@@ -250,8 +324,151 @@ exports.auditarAcaoCallable = onCall({ region: 'southamerica-east1' }, async (re
   return { ok: true, id: ref.id }
 })
 
+exports.solicitarExportacaoAuditoriaCallable = onCall({ region: REGION }, async (req) => {
+  if (!req.auth) {
+    throw new HttpsError('unauthenticated', 'Usuário não autenticado.')
+  }
+
+  const perfil = await resolverPerfil(req.auth.uid)
+  if (!['admin', 'diretor', 'coordenador'].includes(perfil)) {
+    throw new HttpsError('permission-denied', 'Perfil sem permissão para solicitar exportação.')
+  }
+
+  const formato = (req.data?.formato ?? 'json').toLowerCase()
+  if (!['json', 'csv'].includes(formato)) {
+    throw new HttpsError('invalid-argument', 'Formato de exportação inválido.')
+  }
+
+  const filtros = limparUndefined({
+    modulo: limitarTexto(req.data?.modulo, 80) || undefined,
+    acao: limitarTexto(req.data?.acao, 120) || undefined,
+    usuario_id: limitarTexto(req.data?.usuarioId, 128) || undefined,
+    dataInicio: req.data?.dataInicio || undefined,
+    dataFim: req.data?.dataFim || undefined,
+  })
+
+  if (filtros.dataInicio && !isDataIso(filtros.dataInicio)) {
+    throw new HttpsError('invalid-argument', 'dataInicio deve estar no formato YYYY-MM-DD.')
+  }
+  if (filtros.dataFim && !isDataIso(filtros.dataFim)) {
+    throw new HttpsError('invalid-argument', 'dataFim deve estar no formato YYYY-MM-DD.')
+  }
+  if (filtros.dataInicio && filtros.dataFim && filtros.dataInicio > filtros.dataFim) {
+    throw new HttpsError('invalid-argument', 'dataInicio não pode ser maior que dataFim.')
+  }
+
+  const ref = db.collection('auditoria_exportacoes').doc()
+  await ref.set({
+    status: 'solicitada',
+    formato,
+    filtros,
+    solicitado_por: req.auth.uid,
+    perfil_solicitante: perfil,
+    motivo: limitarTexto(req.data?.motivo, 500),
+    resumo: null,
+    preview_registros: [],
+    erro: '',
+    created_at: admin.firestore.FieldValue.serverTimestamp(),
+    updated_at: admin.firestore.FieldValue.serverTimestamp(),
+    processado_em: null,
+  })
+
+  await auditarAcao({
+    usuarioId: req.auth.uid,
+    perfil,
+    acao: 'AUDITORIA_EXPORTACAO_SOLICITADA',
+    modulo: 'auditoria',
+    entidade: 'auditoria_exportacoes',
+    entidadeId: ref.id,
+    valorNovo: { formato, filtros },
+    motivo: limitarTexto(req.data?.motivo, 500),
+  })
+
+  return { ok: true, id: ref.id, status: 'solicitada' }
+})
+
+exports.solicitarFechamentoDiarioCallable = onCall({ region: REGION }, async (req) => {
+  if (!req.auth) {
+    throw new HttpsError('unauthenticated', 'Usuário não autenticado.')
+  }
+
+  const perfil = await resolverPerfil(req.auth.uid)
+  if (!['admin', 'diretor', 'coordenador', 'professor'].includes(perfil)) {
+    throw new HttpsError('permission-denied', 'Perfil sem permissão para solicitar fechamento de diário.')
+  }
+
+  const turmaId = limitarTexto(req.data?.turmaId, 120)
+  const disciplinaId = limitarTexto(req.data?.disciplinaId, 120)
+  const periodo = limitarTexto(req.data?.periodo, 80)
+  const dataReferencia = req.data?.dataReferencia ? limitarTexto(req.data.dataReferencia, 10) : ''
+  const anoLetivo = Number(req.data?.anoLetivo ?? ANO_ATUAL)
+
+  if (!turmaId || !disciplinaId || !periodo) {
+    throw new HttpsError('invalid-argument', 'turmaId, disciplinaId e periodo são obrigatórios.')
+  }
+  if (!Number.isInteger(anoLetivo) || anoLetivo < 2020 || anoLetivo > 2100) {
+    throw new HttpsError('invalid-argument', 'anoLetivo inválido.')
+  }
+  if (dataReferencia && !isDataIso(dataReferencia)) {
+    throw new HttpsError('invalid-argument', 'dataReferencia deve estar no formato YYYY-MM-DD.')
+  }
+
+  const resumo = normalizarResumoDiario(req.data?.resumo)
+  const workflowId = montarWorkflowDiarioId({
+    anoLetivo,
+    turmaId,
+    disciplinaId,
+    periodo,
+    dataReferencia,
+  })
+  const ref = db.collection('diario_workflows').doc(workflowId)
+  const existente = await ref.get()
+  const anterior = existente.exists ? existente.data() : null
+
+  if (anterior?.status === 'aprovado' || anterior?.status === 'fechado') {
+    throw new HttpsError('failed-precondition', 'Já existe workflow concluído para este fechamento.')
+  }
+
+  const payload = {
+    workflow_tipo: 'fechamento_diario',
+    status: 'pendente_aprovacao',
+    turma_id: turmaId,
+    disciplina_id: disciplinaId,
+    ano_letivo: anoLetivo,
+    periodo_referencia: periodo,
+    data_referencia: dataReferencia || null,
+    resumo,
+    observacoes: limitarTexto(req.data?.observacoes, 1000),
+    solicitante_id: req.auth.uid,
+    solicitante_perfil: perfil,
+    ultima_acao: existente.exists ? 'reaberto' : 'solicitado',
+    updated_by: req.auth.uid,
+    updated_at: admin.firestore.FieldValue.serverTimestamp(),
+  }
+
+  await ref.set({
+    ...payload,
+    created_at: anterior?.created_at ?? admin.firestore.FieldValue.serverTimestamp(),
+    solicitado_em: admin.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true })
+
+  await auditarAcao({
+    usuarioId: req.auth.uid,
+    perfil,
+    acao: 'DIARIO_FECHAMENTO_SOLICITADO',
+    modulo: 'diario',
+    entidade: 'diario_workflows',
+    entidadeId: workflowId,
+    valorAnterior: anterior ? { status: anterior.status, resumo: anterior.resumo ?? null } : null,
+    valorNovo: { status: 'pendente_aprovacao', resumo },
+    motivo: payload.observacoes,
+  })
+
+  return { ok: true, id: workflowId, status: 'pendente_aprovacao', reutilizado: existente.exists }
+})
+
 exports.recalcularIndicadoresScheduled = onSchedule(
-  { schedule: 'every 15 minutes', region: 'southamerica-east1' },
+  { schedule: 'every 15 minutes', region: REGION },
   async () => recalcular(ANO_ATUAL)
 )
 
@@ -316,14 +533,14 @@ async function avaliarAlertaFaltas(presenca) {
 
 // ── onPresencaSalva — detecta 25% de faltas ────────────────────────────────
 exports.onPresencaSalva = onDocumentCreated(
-  { document: 'presencas/{id}', region: 'southamerica-east1' },
+  { document: 'presencas/{id}', region: REGION },
   async (event) => {
     await avaliarAlertaFaltas(event.data.data())
   }
 )
 
 exports.onPresencaAtualizada = onDocumentUpdated(
-  { document: 'presencas/{id}', region: 'southamerica-east1' },
+  { document: 'presencas/{id}', region: REGION },
   async (event) => {
     const antes = event.data.before.data()
     const depois = event.data.after.data()
@@ -334,7 +551,7 @@ exports.onPresencaAtualizada = onDocumentUpdated(
 
 // ── onDespesaAprovada — recalcula indicadores ao aprovar despesa ───────────
 exports.onDespesaAprovada = onDocumentUpdated(
-  { document: 'financeiro_lancamentos/{id}', region: 'southamerica-east1' },
+  { document: 'financeiro_lancamentos/{id}', region: REGION },
   async (event) => {
     const antes = event.data.before.data()
     const depois = event.data.after.data()
@@ -356,7 +573,7 @@ exports.onDespesaAprovada = onDocumentUpdated(
 
 // ── onDespesaPendenteCriada — notifica Diretor para aprovação ──────────────
 exports.onDespesaPendenteCriada = onDocumentCreated(
-  { document: 'financeiro_lancamentos/{id}', region: 'southamerica-east1' },
+  { document: 'financeiro_lancamentos/{id}', region: REGION },
   async (event) => {
     const lancamento = event.data.data()
     if (lancamento.tipo !== 'despesa' || lancamento.status !== 'pendente') return
@@ -387,7 +604,7 @@ exports.onDespesaPendenteCriada = onDocumentCreated(
 
 // ── alertarPrazos — diariamente às 8h ─────────────────────────────────────
 exports.alertarPrazos = onSchedule(
-  { schedule: 'every day 08:00', region: 'southamerica-east1' },
+  { schedule: 'every day 08:00', region: REGION },
   async () => {
     const hoje = new Date()
     const em7Dias = new Date(hoje)
@@ -462,7 +679,7 @@ exports.alertarPrazos = onSchedule(
 
 // ── onNotaAlteradaAposFechamento — auditoria obrigatória ──────────────────
 exports.onNotaAlteradaAposFechamento = onDocumentUpdated(
-  { document: 'notas/{id}', region: 'southamerica-east1' },
+  { document: 'notas/{id}', region: REGION },
   async (event) => {
     const antes = event.data.before.data()
     const depois = event.data.after.data()
@@ -501,7 +718,7 @@ exports.onNotaAlteradaAposFechamento = onDocumentUpdated(
 
 // ── onOcorrenciaCriada — auditoria médica/acidente e alerta de gravidade ───
 exports.onOcorrenciaCriada = onDocumentCreated(
-  { document: 'ocorrencias/{id}', region: 'southamerica-east1' },
+  { document: 'ocorrencias/{id}', region: REGION },
   async (event) => {
     const ocorrencia = event.data.data()
     const tiposSensiveis = ['medico', 'acidente']
@@ -545,5 +762,123 @@ exports.onOcorrenciaCriada = onDocumentCreated(
         referencia_modulo: 'ocorrencias',
       })
     }))
+  }
+)
+
+exports.onAuditoriaExportacaoCriada = onDocumentCreated(
+  { document: 'auditoria_exportacoes/{id}', region: REGION },
+  async (event) => {
+    const exportacao = event.data.data()
+    if (exportacao.status !== 'solicitada') return
+
+    try {
+      const { docs, truncado } = await carregarRegistrosAuditoriaParaExportacao(exportacao.filtros ?? {})
+      const preview = docs.slice(0, AUDITORIA_EXPORT_PREVIEW_LIMITE).map((doc) => {
+        const dados = doc.data()
+        return {
+          id: doc.id,
+          acao: dados.acao ?? '',
+          modulo: dados.modulo ?? '',
+          entidade: dados.entidade ?? '',
+          entidade_id: dados.entidade_id ?? '',
+          usuario_id: dados.usuario_id ?? '',
+          created_at: dados.created_at ?? null,
+        }
+      })
+      const createdAts = docs
+        .map(doc => doc.data().created_at)
+        .filter(Boolean)
+
+      await event.data.ref.set({
+        status: 'concluida',
+        resumo: {
+          total_registros: docs.length,
+          truncado,
+          limite_registros: AUDITORIA_EXPORT_MAX_REGISTROS,
+          filtros_aplicados: exportacao.filtros ?? {},
+          primeira_ocorrencia_em: createdAts[createdAts.length - 1] ?? null,
+          ultima_ocorrencia_em: createdAts[0] ?? null,
+        },
+        preview_registros: preview,
+        erro: '',
+        processado_em: admin.firestore.FieldValue.serverTimestamp(),
+        updated_at: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true })
+
+      await auditarAcao({
+        usuarioId: exportacao.solicitado_por,
+        perfil: exportacao.perfil_solicitante,
+        acao: 'AUDITORIA_EXPORTACAO_PROCESSADA',
+        modulo: 'auditoria',
+        entidade: 'auditoria_exportacoes',
+        entidadeId: event.params.id,
+        valorNovo: {
+          status: 'concluida',
+          total_registros: docs.length,
+          truncado,
+        },
+      })
+    } catch (err) {
+      console.error('Falha ao processar exportação de auditoria:', err)
+      await event.data.ref.set({
+        status: 'erro',
+        erro: err?.message ?? 'Falha ao processar exportação.',
+        processado_em: admin.firestore.FieldValue.serverTimestamp(),
+        updated_at: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true })
+    }
+  }
+)
+
+exports.onDiarioWorkflowEscrito = onDocumentWritten(
+  { document: 'diario_workflows/{id}', region: REGION },
+  async (event) => {
+    const antes = event.data.before.exists ? event.data.before.data() : null
+    const depois = event.data.after.exists ? event.data.after.data() : null
+
+    if (!depois || depois.workflow_tipo !== 'fechamento_diario') return
+    if (antes?.status === depois.status) return
+
+    if (depois.status === 'pendente_aprovacao') {
+      await notificarPorPerfil(['coordenador', 'diretor'], {
+        dedupeId: `diario_pendente_${event.params.id}`,
+        tipo: 'diario_pendente_aprovacao',
+        titulo: 'Fechamento de diário pendente',
+        mensagem: `Turma ${depois.turma_id} e disciplina ${depois.disciplina_id} aguardam aprovação.`,
+        referenciaId: event.params.id,
+        referenciaModulo: 'diario',
+      })
+      return
+    }
+
+    if (!antes) return
+
+    if (['aprovado', 'rejeitado', 'fechado'].includes(depois.status)) {
+      const responsavel = depois.updated_by || depois.aprovado_por || 'system'
+      const perfilResponsavel = await resolverPerfil(responsavel)
+
+      await auditarAcao({
+        usuarioId: responsavel,
+        perfil: perfilResponsavel,
+        acao: `DIARIO_WORKFLOW_${String(depois.status).toUpperCase()}`,
+        modulo: 'diario',
+        entidade: 'diario_workflows',
+        entidadeId: event.params.id,
+        valorAnterior: { status: antes.status },
+        valorNovo: { status: depois.status },
+        motivo: limitarTexto(depois.motivo, 500) || limitarTexto(depois.observacoes, 500),
+      })
+
+      if (depois.solicitante_id) {
+        await criarNotificacao({
+          destinatarioId: depois.solicitante_id,
+          tipo: 'diario_workflow_atualizado',
+          titulo: 'Status do diário atualizado',
+          mensagem: `O fechamento do diário foi marcado como ${depois.status}.`,
+          referenciaId: event.params.id,
+          referenciaModulo: 'diario',
+        })
+      }
+    }
   }
 )

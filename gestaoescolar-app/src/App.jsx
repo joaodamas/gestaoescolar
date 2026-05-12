@@ -4,6 +4,7 @@ import { AuthProvider } from './context/AuthContext'
 import PrivateRoute from './components/PrivateRoute'
 import AppLayout from './components/Layout/AppLayout'
 import { ToastProvider } from './components/ui/Toast'
+import { MODULOS_APP } from './config/modulos'
 
 const LoginPage = lazy(() => import('./pages/Login/LoginPage'))
 const DashboardPage = lazy(() => import('./pages/Dashboard/DashboardPage'))
@@ -21,6 +22,32 @@ const ConfiguracoesPage = lazy(() => import('./pages/Configuracoes/Configuracoes
 const UsuariosPage = lazy(() => import('./pages/Usuarios/UsuariosPage'))
 const AuditoriaPage = lazy(() => import('./pages/Auditoria/AuditoriaPage'))
 const SecretariaPage = lazy(() => import('./pages/Secretaria/SecretariaPage'))
+const AreaHubPage = lazy(() => import('./pages/Modulos/AreaHubPage'))
+
+const COMPONENTES_POR_MODULO = {
+  dashboard: DashboardPage,
+  turmas: TurmasPage,
+  alunos: AlunosPage,
+  secretaria: SecretariaPage,
+  diario: AreaHubPage,
+  saude: AreaHubPage,
+  nutricao: AreaHubPage,
+  colegio: AreaHubPage,
+  paesp: AreaHubPage,
+  integracoes: AreaHubPage,
+  supervisao: AreaHubPage,
+  chamada: ChamadaPage,
+  calendario: CalendarioPage,
+  notas: NotasPage,
+  disciplinas: DisciplinasPage,
+  financeiro: FinanceiroPage,
+  ocorrencias: OcorrenciasPage,
+  projetos: ProjetosPage,
+  relatorios: RelatoriosPage,
+  usuarios: UsuariosPage,
+  auditoria: AuditoriaPage,
+  configuracoes: ConfiguracoesPage,
+}
 
 function PageFallback() {
   return (
@@ -44,51 +71,21 @@ export default function App() {
                 <AppLayout />
               </PrivateRoute>
             }>
-              <Route path="/dashboard" element={
-                <PrivateRoute modulo="dashboard"><DashboardPage /></PrivateRoute>
-              } />
-              <Route path="/turmas" element={
-                <PrivateRoute modulo="turmas"><TurmasPage /></PrivateRoute>
-              } />
-              <Route path="/alunos" element={
-                <PrivateRoute modulo="alunos"><AlunosPage /></PrivateRoute>
-              } />
-              <Route path="/secretaria" element={
-                <PrivateRoute modulo="secretaria"><SecretariaPage /></PrivateRoute>
-              } />
-              <Route path="/chamada" element={
-                <PrivateRoute modulo="chamada"><ChamadaPage /></PrivateRoute>
-              } />
-              <Route path="/calendario" element={
-                <PrivateRoute modulo="calendario"><CalendarioPage /></PrivateRoute>
-              } />
-              <Route path="/notas" element={
-                <PrivateRoute modulo="notas"><NotasPage /></PrivateRoute>
-              } />
-              <Route path="/disciplinas" element={
-                <PrivateRoute modulo="disciplinas"><DisciplinasPage /></PrivateRoute>
-              } />
-              <Route path="/financeiro" element={
-                <PrivateRoute modulo="financeiro"><FinanceiroPage /></PrivateRoute>
-              } />
-              <Route path="/ocorrencias" element={
-                <PrivateRoute modulo="ocorrencias"><OcorrenciasPage /></PrivateRoute>
-              } />
-              <Route path="/projetos" element={
-                <PrivateRoute modulo="projetos"><ProjetosPage /></PrivateRoute>
-              } />
-              <Route path="/relatorios" element={
-                <PrivateRoute modulo="relatorios"><RelatoriosPage /></PrivateRoute>
-              } />
-              <Route path="/usuarios" element={
-                <PrivateRoute modulo="usuarios"><UsuariosPage /></PrivateRoute>
-              } />
-              <Route path="/auditoria" element={
-                <PrivateRoute modulo="auditoria"><AuditoriaPage /></PrivateRoute>
-              } />
-              <Route path="/configuracoes" element={
-                <PrivateRoute modulo="configuracoes"><ConfiguracoesPage /></PrivateRoute>
-              } />
+              {MODULOS_APP.map((item) => {
+                const Component = COMPONENTES_POR_MODULO[item.modulo]
+                if (!Component) return null
+                return (
+                  <Route
+                    key={item.modulo}
+                    path={item.path}
+                    element={
+                      <PrivateRoute modulo={item.modulo}>
+                        <Component />
+                      </PrivateRoute>
+                    }
+                  />
+                )
+              })}
             </Route>
 
             <Route path="*" element={<Navigate to="/dashboard" replace />} />

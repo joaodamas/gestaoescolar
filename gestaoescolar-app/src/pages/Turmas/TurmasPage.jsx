@@ -1,16 +1,15 @@
-import { useEffect, useState } from 'react'
-import { collection, query, where, getDocs } from 'firebase/firestore'
-import { db } from '../../firebase/firebase'
+import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import {
   observarTurmas, criarTurma, atualizarTurma, arquivarTurma, contarAlunosDaTurma
 } from '../../services/turmas'
+import { listarUsuarios } from '../../services/usuarios'
 import {
   Users, Plus, Sun, Moon, Sunrise, Edit3, Archive,
   GraduationCap, ClipboardList, AlertCircle, Search
 } from 'lucide-react'
 import PageHeader from '../../components/ui/PageHeader'
-import { Card, Badge, EmptyState, Spinner } from '../../components/ui/Card'
+import { Card, EmptyState, Spinner } from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import { Input, Select } from '../../components/ui/Input'
 import Modal from '../../components/ui/Modal'
@@ -24,7 +23,8 @@ const TURNO_CONFIG = {
 }
 
 export default function TurmasPage() {
-  const { user, perfil } = useAuth()
+  const { user, perfil, escolaId, unidadeAtualId } = useAuth()
+  const escopo = useMemo(() => ({ escolaId, unidadeAtualId, perfil }), [escolaId, unidadeAtualId, perfil])
   const [turmas, setTurmas] = useState([])
   const [carregando, setCarregando] = useState(true)
   const [busca, setBusca] = useState('')
@@ -62,8 +62,8 @@ export default function TurmasPage() {
         const counts = {}
         await Promise.all(lista.map(async t => {
           try {
-            counts[t.id] = await contarAlunosDaTurma(t.id, ANO_LETIVO)
-          } catch (e) {
+            counts[t.id] = await contarAlunosDaTurma(t.id, ANO_LETIVO, escopo)
+          } catch {
             counts[t.id] = 0
           }
         }))
@@ -72,20 +72,20 @@ export default function TurmasPage() {
       (err) => {
         setErroQuery(err.message ?? 'Falha ao carregar turmas. Verifique permissões/índices.')
         setCarregando(false)
-      }
+      },
+      escopo,
     )
     return unsub
-  }, [])
+  }, [escopo])
 
   useEffect(() => {
     // Lista professores ativos
     async function loadProfs() {
-      const q = query(collection(db, 'usuarios'), where('perfil', '==', 'professor'), where('ativo', '==', true))
-      const snap = await getDocs(q)
-      setProfessores(snap.docs.map(d => ({ id: d.id, ...d.data() })))
+      const lista = await listarUsuarios({ perfil: 'professor', ativo: true, ...escopo })
+      setProfessores(lista)
     }
     loadProfs().catch(console.error)
-  }, [])
+  }, [escopo])
 
   function abrirModalNova() {
     setEditando(null)
@@ -133,7 +133,7 @@ export default function TurmasPage() {
       if (editando) {
         await atualizarTurma(editando, dados)
       } else {
-        await criarTurma(dados, user.uid)
+        await criarTurma(dados, user.uid, escopo)
       }
       setModalAberto(false)
     } catch (err) {

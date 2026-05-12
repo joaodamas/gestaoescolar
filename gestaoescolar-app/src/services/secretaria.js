@@ -1,6 +1,7 @@
 import { collection, getDocs, query, where, orderBy } from 'firebase/firestore'
 import { db } from '../firebase/firebase'
 import { mascararTelefone } from '../utils/mascaramento'
+import { filtrarListaPorEscopo } from './escopo'
 
 const ANO_ATUAL = new Date().getFullYear()
 
@@ -95,14 +96,14 @@ function normalizarIntencao(documento) {
   }
 }
 
-async function listarColecao(nomeColecao, anoLetivo, normalizar) {
+async function listarColecao(nomeColecao, anoLetivo, normalizar, contexto = {}) {
   const q = query(
     collection(db, nomeColecao),
     where('ano_letivo', '==', Number(anoLetivo)),
     orderBy('ano_letivo', 'desc'),
   )
   const snap = await getDocs(q)
-  return snap.docs.map(normalizar)
+  return filtrarListaPorEscopo(snap.docs.map(normalizar), contexto)
 }
 
 /**
@@ -113,10 +114,10 @@ async function listarColecao(nomeColecao, anoLetivo, normalizar) {
  * - `errosColecao`: erros por coleção (`permission-denied`, índice faltando etc.)
  *   para a tela mostrar mensagem específica em vez de "sem dados".
  */
-export async function listarRegistrosSecretaria({ anoLetivo = ANO_ATUAL } = {}) {
+export async function listarRegistrosSecretaria({ anoLetivo = ANO_ATUAL, ...contexto } = {}) {
   const consultas = await Promise.allSettled([
-    listarColecao('matriculas', anoLetivo, normalizarMatricula),
-    listarColecao('intencoes_vaga', anoLetivo, normalizarIntencao),
+    listarColecao('matriculas', anoLetivo, normalizarMatricula, contexto),
+    listarColecao('intencoes_vaga', anoLetivo, normalizarIntencao, contexto),
   ])
 
   const errosColecao = {}

@@ -3,6 +3,7 @@ import {
   query, where, orderBy, serverTimestamp
 } from 'firebase/firestore'
 import { db } from '../firebase/firebase'
+import { comEscopoEscolar, filtrarListaPorEscopo } from './escopo'
 
 const ANO_ATUAL = new Date().getFullYear()
 
@@ -28,8 +29,8 @@ export function alunoResumoDaMatricula(matricula = {}) {
   }
 }
 
-export async function criarMatricula(alunoId, turmaId, anoLetivo, criadoPor, alunoResumo = {}) {
-  return addDoc(collection(db, 'matriculas'), {
+export async function criarMatricula(alunoId, turmaId, anoLetivo, criadoPor, alunoResumo = {}, contexto = {}) {
+  return addDoc(collection(db, 'matriculas'), comEscopoEscolar({
     aluno_id: alunoId,
     turma_id: turmaId,
     ano_letivo: anoLetivo ?? ANO_ATUAL,
@@ -40,20 +41,20 @@ export async function criarMatricula(alunoId, turmaId, anoLetivo, criadoPor, alu
     ...montarResumoAlunoMatricula(alunoResumo),
     created_by: criadoPor,
     created_at: serverTimestamp(),
-  })
+  }, contexto))
 }
 
-export async function listarMatriculasDoAluno(alunoId) {
+export async function listarMatriculasDoAluno(alunoId, contexto = {}) {
   const q = query(
     collection(db, 'matriculas'),
     where('aluno_id', '==', alunoId),
     orderBy('ano_letivo', 'desc')
   )
   const snap = await getDocs(q)
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+  return filtrarListaPorEscopo(snap.docs.map(d => ({ id: d.id, ...d.data() })), contexto)
 }
 
-export async function listarMatriculasDaTurma(turmaId, anoLetivo) {
+export async function listarMatriculasDaTurma(turmaId, anoLetivo, contexto = {}) {
   const q = query(
     collection(db, 'matriculas'),
     where('turma_id', '==', turmaId),
@@ -61,7 +62,7 @@ export async function listarMatriculasDaTurma(turmaId, anoLetivo) {
     where('status', '==', 'ativa')
   )
   const snap = await getDocs(q)
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+  return filtrarListaPorEscopo(snap.docs.map(d => ({ id: d.id, ...d.data() })), contexto)
 }
 
 export async function encerrarMatricula(matriculaId) {

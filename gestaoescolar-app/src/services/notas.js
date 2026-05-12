@@ -3,7 +3,6 @@ import {
   doc,
   addDoc,
   getDoc,
-  updateDoc,
   getDocs,
   query,
   where,
@@ -13,12 +12,13 @@ import {
   writeBatch,
 } from 'firebase/firestore'
 import { db } from '../firebase/firebase'
+import { comEscopoEscolar, filtrarListaPorEscopo } from './escopo'
 
 const ANO_ATUAL = new Date().getFullYear()
 
 // ─── Avaliações ──────────────────────────────────────────────────────────────
 
-export async function listarAvaliacoes(turmaId, disciplinaId, bimestre, anoLetivo) {
+export async function listarAvaliacoes(turmaId, disciplinaId, bimestre, anoLetivo, contexto = {}) {
   const q = query(
     collection(db, 'avaliacoes'),
     where('turma_id', '==', turmaId),
@@ -28,26 +28,26 @@ export async function listarAvaliacoes(turmaId, disciplinaId, bimestre, anoLetiv
     orderBy('data_aplicacao', 'asc')
   )
   const snap = await getDocs(q)
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+  return filtrarListaPorEscopo(snap.docs.map(d => ({ id: d.id, ...d.data() })), contexto)
 }
 
-export async function criarAvaliacao(dados) {
-  return addDoc(collection(db, 'avaliacoes'), {
+export async function criarAvaliacao(dados, contexto = {}) {
+  return addDoc(collection(db, 'avaliacoes'), comEscopoEscolar({
     ...dados,
     ano_letivo: dados.ano_letivo ?? ANO_ATUAL,
     created_at: serverTimestamp(),
-  })
+  }, contexto))
 }
 
 // ─── Notas ───────────────────────────────────────────────────────────────────
 
-export async function listarNotas(avaliacaoId) {
+export async function listarNotas(avaliacaoId, contexto = {}) {
   const q = query(
     collection(db, 'notas'),
     where('avaliacao_id', '==', avaliacaoId)
   )
   const snap = await getDocs(q)
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+  return filtrarListaPorEscopo(snap.docs.map(d => ({ id: d.id, ...d.data() })), contexto)
 }
 
 /**
@@ -63,7 +63,8 @@ export async function salvarNota(
   anoLetivo,
   nota,
   lancadoPor,
-  extras = {}
+  extras = {},
+  contexto = {}
 ) {
   const docId = `${alunoId}_${avaliacaoId}`
   const ref = doc(db, 'notas', docId)
@@ -101,6 +102,7 @@ export async function salvarNota(
   return setDoc(
     ref,
     {
+      ...comEscopoEscolar({}, contexto),
       aluno_id: alunoId,
       avaliacao_id: avaliacaoId,
       disciplina_id: disciplinaId,
@@ -149,7 +151,7 @@ export function calcularMediaBimestral(notas, avaliacoes) {
 
 // ─── Fechar bimestre ─────────────────────────────────────────────────────────
 
-export async function fecharBimestre(turmaId, disciplinaId, bimestre, anoLetivo, usuarioId) {
+export async function fecharBimestre(turmaId, disciplinaId, bimestre, anoLetivo, usuarioId, contexto = {}) {
   const q = query(
     collection(db, 'notas'),
     where('turma_id', '==', turmaId),
@@ -159,7 +161,8 @@ export async function fecharBimestre(turmaId, disciplinaId, bimestre, anoLetivo,
   )
 
   const snap = await getDocs(q)
-  if (snap.empty) return
+  const docsNoEscopo = filtrarListaPorEscopo(snap.docs.map(d => ({ id: d.id, ref: d.ref, ...d.data() })), contexto)
+  if (docsNoEscopo.length === 0) return
 
   const batch = writeBatch(db)
   const entrada = {
@@ -168,7 +171,7 @@ export async function fecharBimestre(turmaId, disciplinaId, bimestre, anoLetivo,
     timestamp: new Date().toISOString(),
   }
 
-  snap.docs.forEach(d => {
+  docsNoEscopo.forEach(d => {
     batch.update(d.ref, {
       fechado: true,
       fechado_em: serverTimestamp(),
@@ -182,15 +185,15 @@ export async function fecharBimestre(turmaId, disciplinaId, bimestre, anoLetivo,
 
 // ─── Disciplinas da turma ────────────────────────────────────────────────────
 
-export async function listarDisciplinasDaTurma(turmaId, anoLetivo) {
+export async function listarDisciplinasDaTurma(turmaId, anoLetivo, contexto = {}) {
   const q = query(
     collection(db, 'disciplinas'),
     where('ano_letivo', '==', anoLetivo ?? ANO_ATUAL)
   )
   const snap = await getDocs(q)
-  return snap.docs
+  return filtrarListaPorEscopo(snap.docs
     .map(d => ({ id: d.id, ...d.data() }))
     .filter(d => d.turma_id === turmaId)
     .filter(d => d.ativa !== false)
-    .sort((a, b) => (a.nome ?? '').localeCompare(b.nome ?? '', 'pt-BR'))
+    .sort((a, b) => (a.nome ?? '').localeCompare(b.nome ?? '', 'pt-BR')), contexto)
 }

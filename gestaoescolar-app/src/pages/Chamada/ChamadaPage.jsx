@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { listarTurmas } from '../../services/turmas'
 import { usePresenca } from '../../hooks/usePresenca'
@@ -13,8 +13,9 @@ const STATUS_BTN = {
 }
 
 export default function ChamadaPage() {
-  const { user, perfil } = useAuth()
+  const { user, perfil, escolaId, unidadeAtualId } = useAuth()
   const isDiretor = ['diretor', 'coordenador'].includes(perfil?.perfil)
+  const escopo = useMemo(() => ({ escolaId, unidadeAtualId, perfil }), [escolaId, unidadeAtualId, perfil])
 
   const [turmas, setTurmas]       = useState([])
   const [turmaSel, setTurmaSel]   = useState('')
@@ -38,19 +39,19 @@ export default function ChamadaPage() {
     marcarPresenca,
     salvar: salvarChamadaHook,
     carregarHistorico,
-  } = usePresenca({ turmaId: turmaSel, data, professorId: user?.uid })
+  } = usePresenca({ turmaId: turmaSel, data, professorId: user?.uid, contexto: escopo })
 
   const { presentes, ausentes, justificados } = contagem
 
   // Carrega turmas (professor vê só as suas)
   useEffect(() => {
-    listarTurmas().then(todas => {
+    listarTurmas(undefined, escopo).then(todas => {
       if (isDiretor) { setTurmas(todas); return }
       const minhas = todas.filter(t => perfil?.turmas_ids?.includes(t.id))
       setTurmas(minhas)
       if (minhas.length === 1) setTurmaSel(minhas[0].id)
     })
-  }, [])
+  }, [escopo, isDiretor, perfil?.turmas_ids])
 
   // Reset de feedback ao trocar filtros
   useEffect(() => { setSucesso(false) }, [turmaSel, data])

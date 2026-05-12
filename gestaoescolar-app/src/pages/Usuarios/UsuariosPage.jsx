@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import {
   observarUsuarios, atualizarUsuario, alternarStatusUsuario,
-  vincularTurmas, criarUsuarioDoc
+  criarUsuarioDoc
 } from '../../services/usuarios'
 import { listarTodasTurmas } from '../../services/turmas'
 import {
@@ -27,8 +27,9 @@ const PERFIS = [
 const PERFIL_MAP = Object.fromEntries(PERFIS.map(p => [p.id, p]))
 
 export default function UsuariosPage() {
-  const { perfil: meuPerfil } = useAuth()
+  const { perfil: meuPerfil, escolaId, unidadeAtualId } = useAuth()
   const podeGerenciar = ['diretor', 'admin'].includes(meuPerfil?.perfil)
+  const escopo = useMemo(() => ({ escolaId, unidadeAtualId, perfil: meuPerfil }), [escolaId, unidadeAtualId, meuPerfil])
 
   const [usuarios, setUsuarios] = useState([])
   const [turmas, setTurmas] = useState([])
@@ -58,14 +59,15 @@ export default function UsuariosPage() {
       err => {
         setErroQuery(err.message ?? 'Erro ao carregar usuários. Verifique permissões/índices.')
         setCarregando(false)
-      }
+      },
+      escopo,
     )
     return unsub
-  }, [])
+  }, [escopo])
 
   useEffect(() => {
-    listarTodasTurmas().then(setTurmas).catch(() => setTurmas([]))
-  }, [])
+    listarTodasTurmas(undefined, escopo).then(setTurmas).catch(() => setTurmas([]))
+  }, [escopo])
 
   const usuariosFiltrados = useMemo(() => {
     return usuarios.filter(u => {
@@ -140,7 +142,7 @@ export default function UsuariosPage() {
           perfil: form.perfil,
           ativo: form.ativo,
           turmas_ids: form.perfil === 'professor' ? form.turmas_ids : [],
-        })
+        }, escopo)
         setSucesso('Documento de usuário criado. Use o UID do Firebase Auth.')
       }
       setModalAberto(false)

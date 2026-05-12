@@ -66,8 +66,9 @@ const FORM_VAZIO = {
 }
 
 export default function CalendarioPage() {
-  const { user, perfil } = useAuth()
+  const { user, perfil, escolaId, unidadeAtualId } = useAuth()
   const podeGerenciar = ['diretor', 'admin'].includes(perfil?.perfil)
+  const escopo = useMemo(() => ({ escolaId, unidadeAtualId, perfil }), [escolaId, unidadeAtualId, perfil])
 
   const [eventos, setEventos]     = useState([])
   const [turmas, setTurmas]       = useState([])
@@ -101,9 +102,9 @@ export default function CalendarioPage() {
     setErroQuery('')
     try {
       const [lista, total, ts] = await Promise.all([
-        listarCalendario(ano),
-        contarDiasLetivos(ano),
-        listarTodasTurmas(ano).catch(() => []),
+        listarCalendario(ano, escopo),
+        contarDiasLetivos(ano, escopo),
+        listarTodasTurmas(ano, escopo).catch(() => []),
       ])
       setEventos(lista)
       setDiasLetivos(total)
@@ -116,7 +117,7 @@ export default function CalendarioPage() {
     }
   }
 
-  useEffect(() => { carregar(filtroAno) }, [filtroAno])
+  useEffect(() => { carregar(filtroAno) }, [filtroAno, escopo])
 
   // Mapa { 'YYYY-MM-DD': evento } — primeiro evento da data (em geral só um)
   const eventosPorData = useMemo(() => {
@@ -225,7 +226,7 @@ export default function CalendarioPage() {
       if (editandoId) {
         await atualizarEvento(editandoId, dados)
       } else {
-        await criarEvento(dados, user.uid)
+        await criarEvento(dados, user.uid, escopo)
       }
       fecharModal()
       await carregar(filtroAno)

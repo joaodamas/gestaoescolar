@@ -1,8 +1,9 @@
 import {
-  collection, doc, getDoc, getDocs, updateDoc, writeBatch,
+  collection, doc, getDoc, getDocs, writeBatch,
   query, where, serverTimestamp, Timestamp
 } from 'firebase/firestore'
 import { db } from '../firebase/firebase'
+import { comEscopoEscolar, filtrarListaPorEscopo } from './escopo'
 
 function editavelAte() {
   const d = new Date()
@@ -12,7 +13,7 @@ function editavelAte() {
 
 // S-1 QA: salvarChamada agora faz upsert — verifica existência antes de criar novo documento
 // Usa ID determinístico: {alunoId}_{turmaId}_{data} para garantir unicidade
-export async function salvarChamada(entradas, professorId) {
+export async function salvarChamada(entradas, professorId, contexto = {}) {
   const batch = writeBatch(db)
   const limite = editavelAte()
 
@@ -31,6 +32,7 @@ export async function salvarChamada(entradas, professorId) {
     } else {
       // Cria novo documento com ID determinístico
       batch.set(ref, {
+        ...comEscopoEscolar({}, contexto),
         aluno_id: alunoId,
         matricula_id: matriculaId,
         turma_id: turmaId,
@@ -51,28 +53,27 @@ export async function salvarChamada(entradas, professorId) {
   return batch.commit()
 }
 
-export async function buscarChamadaDoDia(turmaId, data) {
+export async function buscarChamadaDoDia(turmaId, data, contexto = {}) {
   const q = query(
     collection(db, 'presencas'),
     where('turma_id', '==', turmaId),
     where('data', '==', data)
   )
   const snap = await getDocs(q)
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+  return filtrarListaPorEscopo(snap.docs.map(d => ({ id: d.id, ...d.data() })), contexto)
 }
 
 // M-4 QA: usa limit no Firestore em vez de fatiar no cliente
-export async function historicoChamadas(turmaId, limiteDatas = 10) {
+export async function historicoChamadas(turmaId, limiteDatas = 10, contexto = {}) {
   const q = query(
     collection(db, 'presencas'),
     where('turma_id', '==', turmaId)
   )
   const snap = await getDocs(q)
   const porData = {}
-  snap.docs.forEach(d => {
-    const dado = d.data()
+  filtrarListaPorEscopo(snap.docs.map(d => ({ id: d.id, ...d.data() })), contexto).forEach(dado => {
     if (!porData[dado.data]) porData[dado.data] = []
-    porData[dado.data].push({ id: d.id, ...dado })
+    porData[dado.data].push(dado)
   })
   return Object.entries(porData)
     .sort(([a], [b]) => b.localeCompare(a))

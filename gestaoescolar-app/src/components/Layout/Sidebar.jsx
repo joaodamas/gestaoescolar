@@ -1,44 +1,14 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
-  LayoutDashboard, Users, ClipboardList, BookOpen,
-  Wallet, AlertTriangle, FolderKanban, BarChart3,
-  Settings, LogOut, GraduationCap, ChevronDown,
-  School, Shield, ShieldCheck, BookMarked, Calendar,
-  X
+  LogOut, GraduationCap, ChevronDown, X
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { useEffect, useRef, useState } from 'react'
 import NotificationBell from './NotificationBell'
 import { MODULOS_POR_PERFIL } from '../../config/permissoes'
+import { MODULOS_APP, SECOES_MENU } from '../../config/modulos'
 import Avatar from '../ui/Avatar'
-
-const MENU = [
-  { secao: 'Visão Geral', items: [
-    { path: '/dashboard',     label: 'Dashboard',      icon: LayoutDashboard, modulo: 'dashboard' },
-  ]},
-  { secao: 'Secretaria', items: [
-    { path: '/secretaria',    label: 'Secretaria',     icon: ClipboardList,   modulo: 'secretaria' },
-  ]},
-  { secao: 'Pedagógico', items: [
-    { path: '/turmas',        label: 'Turmas',         icon: School,          modulo: 'turmas' },
-    { path: '/alunos',        label: 'Alunos',         icon: Users,           modulo: 'alunos' },
-    { path: '/chamada',       label: 'Chamada',        icon: ClipboardList,   modulo: 'chamada' },
-    { path: '/calendario',    label: 'Calendário',     icon: Calendar,        modulo: 'calendario' },
-    { path: '/notas',         label: 'Notas',          icon: BookOpen,        modulo: 'notas' },
-    { path: '/disciplinas',   label: 'Disciplinas',    icon: BookMarked,      modulo: 'disciplinas' },
-    { path: '/ocorrencias',   label: 'Ocorrências',    icon: AlertTriangle,   modulo: 'ocorrencias' },
-  ]},
-  { secao: 'Administrativo', items: [
-    { path: '/financeiro',    label: 'Financeiro',     icon: Wallet,          modulo: 'financeiro' },
-    { path: '/projetos',      label: 'Projetos',       icon: FolderKanban,    modulo: 'projetos' },
-    { path: '/relatorios',    label: 'Relatórios',     icon: BarChart3,       modulo: 'relatorios' },
-  ]},
-  { secao: 'Sistema', items: [
-    { path: '/usuarios',      label: 'Usuários',       icon: Shield,          modulo: 'usuarios' },
-    { path: '/auditoria',     label: 'Auditoria',      icon: ShieldCheck,     modulo: 'auditoria' },
-    { path: '/configuracoes', label: 'Configurações',  icon: Settings,        modulo: 'configuracoes' },
-  ]},
-]
+import { Select } from '../ui/Input'
 
 const BADGE_PERFIL = {
   diretor:     { label: 'Diretor(a)',     cor: 'bg-purple-500/15 text-purple-300 ring-purple-500/30' },
@@ -46,6 +16,10 @@ const BADGE_PERFIL = {
   professor:   { label: 'Professor(a)',   cor: 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/30' },
   admin:       { label: 'Administrativo', cor: 'bg-orange-500/15 text-orange-300 ring-orange-500/30' },
   secretaria:  { label: 'Secretaria',     cor: 'bg-slate-500/15 text-slate-300 ring-slate-500/30' },
+  supervisor:  { label: 'Supervisor(a)',  cor: 'bg-cyan-500/15 text-cyan-300 ring-cyan-500/30' },
+  saude:       { label: 'Saúde',          cor: 'bg-rose-500/15 text-rose-300 ring-rose-500/30' },
+  nutricao:    { label: 'Nutrição',       cor: 'bg-amber-500/15 text-amber-300 ring-amber-500/30' },
+  transporte:  { label: 'Transporte',     cor: 'bg-indigo-500/15 text-indigo-300 ring-indigo-500/30' },
 }
 
 const SELETOR_FOCAVEIS = [
@@ -55,13 +29,17 @@ const SELETOR_FOCAVEIS = [
 ].join(',')
 
 export default function Sidebar({ aberta = false, onFechar }) {
-  const { perfil, logout } = useAuth()
+  const { perfil, logout, unidadeAtual, unidadesDisponiveis, selecionarUnidade } = useAuth()
   const navigate = useNavigate()
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const asideRef = useRef(null)
   const botaoFecharRef = useRef(null)
 
   const modulosDisponiveis = MODULOS_POR_PERFIL[perfil?.perfil] ?? []
+  const secoesMenu = SECOES_MENU.map((secao) => ({
+    secao,
+    items: MODULOS_APP.filter((item) => item.secao === secao),
+  }))
   const badge = BADGE_PERFIL[perfil?.perfil]
 
   async function handleLogout() {
@@ -132,7 +110,26 @@ export default function Sidebar({ aberta = false, onFechar }) {
 
       {/* Navegação por seções */}
       <nav className="flex-1 px-3 py-4 overflow-y-auto">
-        {MENU.map(secao => {
+        {unidadesDisponiveis.length > 0 && (
+          <div className="mb-5 px-2">
+            <div className="rounded-xl border border-slate-800/60 bg-slate-900/60 p-3">
+              <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                Você está acessando
+              </p>
+              <Select
+                value={unidadeAtual?.id ?? ''}
+                onChange={(e) => selecionarUnidade(e.target.value)}
+                className="[&_label]:hidden"
+              >
+                {unidadesDisponiveis.map((unidade) => (
+                  <option key={unidade.id} value={unidade.id}>{unidade.nome}</option>
+                ))}
+              </Select>
+            </div>
+          </div>
+        )}
+
+        {secoesMenu.map(secao => {
           const itensVisiveis = secao.items.filter(item => modulosDisponiveis.includes(item.modulo))
           if (itensVisiveis.length === 0) return null
 

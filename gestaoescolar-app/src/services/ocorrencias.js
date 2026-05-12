@@ -13,6 +13,7 @@ import {
   Timestamp,
 } from 'firebase/firestore'
 import { db } from '../firebase/firebase'
+import { comEscopoEscolar, filtrarListaPorEscopo } from './escopo'
 
 // Tipos restritos a professores
 const TIPOS_RESTRITOS_PROFESSOR = ['medico', 'acidente']
@@ -56,7 +57,7 @@ export async function listarOcorrencias(perfil, filtros = {}) {
     }
     condicoesTipo.push(orderBy('data_ocorrencia', 'desc'))
     const snap = await getDocs(query(ref, ...condicoesTipo))
-    return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+    return filtrarListaPorEscopo(snap.docs.map(d => ({ id: d.id, ...d.data() })), filtros)
   }
 
   // Filtros comuns (não-professor ou professor sem filtro de tipo específico)
@@ -79,7 +80,7 @@ export async function listarOcorrencias(perfil, filtros = {}) {
 
   const q = query(ref, ...condicoes)
   const snap = await getDocs(q)
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+  return filtrarListaPorEscopo(snap.docs.map(d => ({ id: d.id, ...d.data() })), filtros)
 }
 
 /**
@@ -89,7 +90,7 @@ export async function listarOcorrencias(perfil, filtros = {}) {
  * @param {string} usuarioId - UID do usuário que está registrando
  * @returns {Promise<DocumentReference>}
  */
-export async function criarOcorrencia(dados, usuarioId) {
+export async function criarOcorrencia(dados, usuarioId, contexto = {}) {
   // Denormalização: salva o snapshot do nome do aluno e do registrador
   // para evitar lookup em toda listagem (boa prática Firestore)
   let alunoNome = dados.aluno_nome ?? ''
@@ -108,7 +109,7 @@ export async function criarOcorrencia(dados, usuarioId) {
     } catch {}
   }
 
-  return addDoc(collection(db, 'ocorrencias'), {
+  return addDoc(collection(db, 'ocorrencias'), comEscopoEscolar({
     aluno_id: dados.aluno_id,
     aluno_nome: alunoNome,
     tipo: dados.tipo,
@@ -121,7 +122,7 @@ export async function criarOcorrencia(dados, usuarioId) {
     registrado_por_nome: registradoPorNome,
     notificado_responsavel: dados.notificado_responsavel ?? false,
     created_at: serverTimestamp(),
-  })
+  }, contexto))
 }
 
 /**
@@ -143,7 +144,7 @@ export async function marcarResolvida(id) {
  * @param {string} termo - Texto digitado pelo usuário
  * @returns {Promise<Array>}
  */
-export async function buscarAlunos(termo) {
+export async function buscarAlunos(termo, contexto = {}) {
   if (!termo || termo.trim().length < 2) return []
   const termoBusca = termo.trim()
   const termoFim = termoBusca + ''
@@ -156,7 +157,7 @@ export async function buscarAlunos(termo) {
     limit(10)
   )
   const snap = await getDocs(q)
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+  return filtrarListaPorEscopo(snap.docs.map(d => ({ id: d.id, ...d.data() })), contexto)
 }
 
 /**
@@ -166,7 +167,7 @@ export async function buscarAlunos(termo) {
  * @param {string} perfil - Perfil do usuário
  * @returns {Promise<object>} - { disciplinar: N, medico: N, encaminhamento: N, reuniao: N, acidente: N }
  */
-export async function contarPorTipo(perfil) {
+export async function contarPorTipo(perfil, contexto = {}) {
   const contagens = {
     disciplinar: 0,
     medico: 0,
@@ -184,7 +185,7 @@ export async function contarPorTipo(perfil) {
     tiposConsultar.map(async (tipo) => {
       const q = query(collection(db, 'ocorrencias'), where('tipo', '==', tipo))
       const snap = await getDocs(q)
-      contagens[tipo] = snap.size
+      contagens[tipo] = filtrarListaPorEscopo(snap.docs.map(d => ({ id: d.id, ...d.data() })), contexto).length
     })
   )
 

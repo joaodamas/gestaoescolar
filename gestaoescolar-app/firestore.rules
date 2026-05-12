@@ -7,8 +7,16 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function usuarioDoc() {
+      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid));
+    }
+
+    function usuarioData() {
+      return usuarioDoc().data;
+    }
+
     function perfil() {
-      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.perfil;
+      return usuarioData().perfil;
     }
 
     function isPerfil(p) {
@@ -21,11 +29,54 @@ service cloud.firestore {
 
     function isAtivo() {
       return isAuth() &&
-        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.ativo == true;
+        usuarioData().ativo == true;
     }
 
     function hasMinhasTurmas(turmaId) {
-      return turmaId in get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.turmas_ids;
+      return turmaId in usuarioData().turmas_ids;
+    }
+
+    // Helpers incrementais para escopo por unidade/escola.
+    // Mantêm compatibilidade com documentos e perfis legados que ainda não
+    // carregam unidade_id / escola_id / unidades_ids / escolas_ids.
+    function usuarioUnidadeAtualId() {
+      return usuarioData().get('unidade_atual_id', usuarioData().get('escola_atual_id', null));
+    }
+
+    function usuarioUnidadesIds() {
+      return usuarioData().get(
+        'unidades_ids',
+        usuarioData().get(
+          'escolas_ids',
+          usuarioUnidadeAtualId() == null ? [] : [usuarioUnidadeAtualId()]
+        )
+      );
+    }
+
+    function recursoUnidadeId(data) {
+      return data.get('unidade_id', data.get('escola_id', null));
+    }
+
+    function requestUnidadeId() {
+      return recursoUnidadeId(request.resource.data);
+    }
+
+    function resourceUnidadeId() {
+      return recursoUnidadeId(resource.data);
+    }
+
+    function hasEscopoDaUnidade(unidadeId) {
+      return unidadeId == null
+        || usuarioUnidadeAtualId() == null
+        || unidadeId in usuarioUnidadesIds();
+    }
+
+    function requestDentroDoEscopoDaUnidade() {
+      return hasEscopoDaUnidade(requestUnidadeId());
+    }
+
+    function resourceDentroDoEscopoDaUnidade() {
+      return hasEscopoDaUnidade(resourceUnidadeId());
     }
 
     // ── /usuarios ────────────────────────────────────────────────────────
@@ -34,7 +85,7 @@ service cloud.firestore {
       allow create: if isAtivo() && isAnyOf(['diretor', 'admin']);
       allow update: if isAtivo() && (
         // Próprio usuário atualiza apenas ultimo_acesso
-        (request.auth.uid == uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ultimo_acesso']))
+        (request.auth.uid == uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ultimo_acesso', 'unidade_atual_id']))
         // Diretor/Admin atualizam tudo exceto UID
         || isAnyOf(['diretor', 'admin'])
       );
@@ -43,36 +94,39 @@ service cloud.firestore {
 
     // ── /alunos ──────────────────────────────────────────────────────────
     match /alunos/{alunoId} {
-      allow read:   if isAtivo() && isAnyOf(['diretor', 'coordenador']);
-      allow create: if isAtivo() && isAnyOf(['diretor', 'coordenador']);
-      allow update: if isAtivo() && isAnyOf(['diretor', 'coordenador']);
+      allow read:   if isAtivo() && isAnyOf(['diretor', 'coordenador']) && resourceDentroDoEscopoDaUnidade();
+      allow create: if isAtivo() && isAnyOf(['diretor', 'coordenador']) && requestDentroDoEscopoDaUnidade();
+      allow update: if isAtivo() && isAnyOf(['diretor', 'coordenador']) && resourceDentroDoEscopoDaUnidade() && requestDentroDoEscopoDaUnidade();
       allow delete: if false;
     }
 
     // ── /responsaveis ────────────────────────────────────────────────────
     match /responsaveis/{respId} {
-      allow read:   if isAtivo() && isAnyOf(['diretor', 'coordenador']);
-      allow create: if isAtivo() && isAnyOf(['diretor', 'coordenador']);
-      allow update: if isAtivo() && isAnyOf(['diretor', 'coordenador']);
+      allow read:   if isAtivo() && isAnyOf(['diretor', 'coordenador']) && resourceDentroDoEscopoDaUnidade();
+      allow create: if isAtivo() && isAnyOf(['diretor', 'coordenador']) && requestDentroDoEscopoDaUnidade();
+      allow update: if isAtivo() && isAnyOf(['diretor', 'coordenador']) && resourceDentroDoEscopoDaUnidade() && requestDentroDoEscopoDaUnidade();
       allow delete: if false;
     }
 
     // ── /matriculas ──────────────────────────────────────────────────────
     match /matriculas/{matId} {
       allow read: if isAtivo() && (
-        isAnyOf(['diretor', 'coordenador', 'admin', 'secretaria'])
-        || (isPerfil('professor') && hasMinhasTurmas(resource.data.turma_id))
+        (
+          isAnyOf(['diretor', 'coordenador', 'admin', 'secretaria'])
+          || (isPerfil('professor') && hasMinhasTurmas(resource.data.turma_id))
+        )
+        && resourceDentroDoEscopoDaUnidade()
       );
-      allow create: if isAtivo() && isAnyOf(['diretor', 'coordenador', 'secretaria']);
-      allow update: if isAtivo() && isAnyOf(['diretor', 'coordenador', 'secretaria']);
+      allow create: if isAtivo() && isAnyOf(['diretor', 'coordenador', 'secretaria']) && requestDentroDoEscopoDaUnidade();
+      allow update: if isAtivo() && isAnyOf(['diretor', 'coordenador', 'secretaria']) && resourceDentroDoEscopoDaUnidade() && requestDentroDoEscopoDaUnidade();
       allow delete: if false;
     }
 
     // ── /intencoes_vaga ──────────────────────────────────────────────────
     match /intencoes_vaga/{intId} {
-      allow read:   if isAtivo() && isAnyOf(['diretor', 'coordenador', 'admin', 'secretaria']);
-      allow create: if isAtivo() && isAnyOf(['diretor', 'coordenador', 'secretaria']);
-      allow update: if isAtivo() && isAnyOf(['diretor', 'coordenador', 'secretaria']);
+      allow read:   if isAtivo() && isAnyOf(['diretor', 'coordenador', 'admin', 'secretaria']) && resourceDentroDoEscopoDaUnidade();
+      allow create: if isAtivo() && isAnyOf(['diretor', 'coordenador', 'secretaria']) && requestDentroDoEscopoDaUnidade();
+      allow update: if isAtivo() && isAnyOf(['diretor', 'coordenador', 'secretaria']) && resourceDentroDoEscopoDaUnidade() && requestDentroDoEscopoDaUnidade();
       allow delete: if false;
     }
 
@@ -80,34 +134,40 @@ service cloud.firestore {
     match /turmas/{turmaId} {
       // C-4 QA: professor só lê turmas das quais faz parte
       allow read: if isAtivo() && (
-        isAnyOf(['diretor', 'coordenador', 'admin', 'secretaria'])
-        || (isPerfil('professor') && hasMinhasTurmas(turmaId))
+        (
+          isAnyOf(['diretor', 'coordenador', 'admin', 'secretaria'])
+          || (isPerfil('professor') && hasMinhasTurmas(turmaId))
+        )
+        && resourceDentroDoEscopoDaUnidade()
       );
-      allow create: if isAtivo() && isAnyOf(['diretor', 'coordenador']);
-      allow update: if isAtivo() && isAnyOf(['diretor', 'coordenador']);
+      allow create: if isAtivo() && isAnyOf(['diretor', 'coordenador']) && requestDentroDoEscopoDaUnidade();
+      allow update: if isAtivo() && isAnyOf(['diretor', 'coordenador']) && resourceDentroDoEscopoDaUnidade() && requestDentroDoEscopoDaUnidade();
       allow delete: if false;
     }
 
     // ── /disciplinas ─────────────────────────────────────────────────────
     match /disciplinas/{discId} {
       allow read: if isAtivo() && (
-        isAnyOf(['diretor', 'coordenador', 'admin'])
-        || (isPerfil('professor') && (
-          hasMinhasTurmas(resource.data.turma_id)
-          || resource.data.professor_id == request.auth.uid
-          || request.auth.uid in resource.data.get('professores_ids', [])
-        ))
+        (
+          isAnyOf(['diretor', 'coordenador', 'admin'])
+          || (isPerfil('professor') && (
+            hasMinhasTurmas(resource.data.turma_id)
+            || resource.data.professor_id == request.auth.uid
+            || request.auth.uid in resource.data.get('professores_ids', [])
+          ))
+        )
+        && resourceDentroDoEscopoDaUnidade()
       );
-      allow create: if isAtivo() && isAnyOf(['diretor', 'coordenador']);
-      allow update: if isAtivo() && isAnyOf(['diretor', 'coordenador']);
+      allow create: if isAtivo() && isAnyOf(['diretor', 'coordenador']) && requestDentroDoEscopoDaUnidade();
+      allow update: if isAtivo() && isAnyOf(['diretor', 'coordenador']) && resourceDentroDoEscopoDaUnidade() && requestDentroDoEscopoDaUnidade();
       allow delete: if false;
     }
 
     // ── /calendario ──────────────────────────────────────────────────────
     match /calendario/{calId} {
-      allow read: if isAtivo();
-      allow create: if isAtivo() && isAnyOf(['diretor', 'admin']);
-      allow update: if isAtivo() && isAnyOf(['diretor', 'admin']);
+      allow read: if isAtivo() && resourceDentroDoEscopoDaUnidade();
+      allow create: if isAtivo() && isAnyOf(['diretor', 'admin']) && requestDentroDoEscopoDaUnidade();
+      allow update: if isAtivo() && isAnyOf(['diretor', 'admin']) && resourceDentroDoEscopoDaUnidade() && requestDentroDoEscopoDaUnidade();
       allow delete: if false;
     }
 
@@ -116,18 +176,18 @@ service cloud.firestore {
       allow read: if isAtivo() && (
         isAnyOf(['diretor', 'coordenador'])
         || (isPerfil('professor') && hasMinhasTurmas(resource.data.turma_id))
-      );
+      ) && resourceDentroDoEscopoDaUnidade();
       allow create: if isAtivo() && (
         isAnyOf(['diretor', 'coordenador'])
         || (isPerfil('professor') && hasMinhasTurmas(request.resource.data.turma_id))
-      );
+      ) && requestDentroDoEscopoDaUnidade();
       // Edição: professor só dentro do prazo de 48h; coord/diretor sempre
       allow update: if isAtivo() && (
         isAnyOf(['diretor', 'coordenador'])
         || (isPerfil('professor')
             && hasMinhasTurmas(resource.data.turma_id)
             && resource.data.editavel_ate > request.time)
-      );
+      ) && resourceDentroDoEscopoDaUnidade() && requestDentroDoEscopoDaUnidade();
       allow delete: if false;
     }
 
@@ -136,15 +196,15 @@ service cloud.firestore {
       allow read: if isAtivo() && (
         isAnyOf(['diretor', 'coordenador'])
         || (isPerfil('professor') && hasMinhasTurmas(resource.data.turma_id))
-      );
+      ) && resourceDentroDoEscopoDaUnidade();
       allow create: if isAtivo() && (
         isAnyOf(['diretor', 'coordenador'])
         || (isPerfil('professor') && hasMinhasTurmas(request.resource.data.turma_id))
-      );
+      ) && requestDentroDoEscopoDaUnidade();
       allow update: if isAtivo() && (
         isAnyOf(['diretor', 'coordenador'])
         || (isPerfil('professor') && hasMinhasTurmas(resource.data.turma_id))
-      );
+      ) && resourceDentroDoEscopoDaUnidade() && requestDentroDoEscopoDaUnidade();
       allow delete: if false;
     }
 
@@ -153,53 +213,63 @@ service cloud.firestore {
       allow read: if isAtivo() && (
         isAnyOf(['diretor', 'coordenador'])
         || (isPerfil('professor') && hasMinhasTurmas(resource.data.turma_id))
-      );
+      ) && resourceDentroDoEscopoDaUnidade();
       allow create: if isAtivo() && (
         isAnyOf(['diretor', 'coordenador'])
         || (isPerfil('professor') && hasMinhasTurmas(request.resource.data.turma_id))
-      );
+      ) && requestDentroDoEscopoDaUnidade();
       // Professor só edita se bimestre não fechado; coord/diretor sempre
       allow update: if isAtivo() && (
         isAnyOf(['diretor', 'coordenador'])
         || (isPerfil('professor')
             && hasMinhasTurmas(resource.data.turma_id)
             && resource.data.fechado == false)
-      );
+      ) && resourceDentroDoEscopoDaUnidade() && requestDentroDoEscopoDaUnidade();
       allow delete: if false;
     }
 
     // ── /ocorrencias ─────────────────────────────────────────────────────
     match /ocorrencias/{ocorId} {
       allow read: if isAtivo() && (
-        isAnyOf(['diretor', 'coordenador'])
-        || (isPerfil('professor')
-            && resource.data.tipo != 'medico'
-            && resource.data.tipo != 'acidente'
-            && hasMinhasTurmas(resource.data.turma_id))
+        (
+          isAnyOf(['diretor', 'coordenador'])
+          || (isPerfil('professor')
+              && resource.data.tipo != 'medico'
+              && resource.data.tipo != 'acidente'
+              && hasMinhasTurmas(resource.data.turma_id))
+        )
+        && resourceDentroDoEscopoDaUnidade()
       );
       // S-4 QA: professor não pode criar ocorrências médicas nem de acidente
       allow create: if isAtivo() && (
-        isAnyOf(['diretor', 'coordenador'])
-        || (isPerfil('professor')
-            && request.resource.data.tipo != 'medico'
-            && request.resource.data.tipo != 'acidente')
+        (
+          isAnyOf(['diretor', 'coordenador'])
+          || (isPerfil('professor')
+              && request.resource.data.tipo != 'medico'
+              && request.resource.data.tipo != 'acidente')
+        )
+        && requestDentroDoEscopoDaUnidade()
       );
-      allow update: if isAtivo() && isAnyOf(['diretor', 'coordenador']);
+      allow update: if isAtivo() && isAnyOf(['diretor', 'coordenador']) && resourceDentroDoEscopoDaUnidade() && requestDentroDoEscopoDaUnidade();
       allow delete: if false;
     }
 
     // ── /financeiro_lancamentos ──────────────────────────────────────────
     match /financeiro_lancamentos/{lancId} {
-      allow read:   if isAtivo() && isAnyOf(['diretor', 'admin']);
-      allow create: if isAtivo() && isPerfil('admin');
+      allow read:   if isAtivo() && isAnyOf(['diretor', 'admin']) && resourceDentroDoEscopoDaUnidade();
+      allow create: if isAtivo() && isPerfil('admin') && requestDentroDoEscopoDaUnidade();
       allow update: if isAtivo() && (
         (
           isPerfil('admin')
+          && resourceDentroDoEscopoDaUnidade()
+          && requestDentroDoEscopoDaUnidade()
           && request.resource.data.status == resource.data.status
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['comprovante_url'])
         )
         || (
           isPerfil('diretor')
+          && resourceDentroDoEscopoDaUnidade()
+          && requestDentroDoEscopoDaUnidade()
           && resource.data.status == 'pendente'
           && request.resource.data.status in ['aprovado', 'cancelado']
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
@@ -215,17 +285,17 @@ service cloud.firestore {
 
     // ── /projetos ────────────────────────────────────────────────────────
     match /projetos/{projId} {
-      allow read:  if isAtivo() && isAnyOf(['diretor', 'coordenador', 'admin']);
-      allow create: if isAtivo() && isAnyOf(['diretor', 'coordenador']);
-      allow update: if isAtivo() && isAnyOf(['diretor', 'coordenador']);
+      allow read:  if isAtivo() && isAnyOf(['diretor', 'coordenador', 'admin']) && resourceDentroDoEscopoDaUnidade();
+      allow create: if isAtivo() && isAnyOf(['diretor', 'coordenador']) && requestDentroDoEscopoDaUnidade();
+      allow update: if isAtivo() && isAnyOf(['diretor', 'coordenador']) && resourceDentroDoEscopoDaUnidade() && requestDentroDoEscopoDaUnidade();
       allow delete: if false;
     }
 
     // ── /pendencias ──────────────────────────────────────────────────────
     match /pendencias/{pendId} {
-      allow read:  if isAtivo() && isAnyOf(['diretor', 'coordenador', 'admin']);
-      allow create: if isAtivo() && isAnyOf(['diretor', 'coordenador', 'admin']);
-      allow update: if isAtivo() && isAnyOf(['diretor', 'coordenador', 'admin']);
+      allow read:  if isAtivo() && isAnyOf(['diretor', 'coordenador', 'admin']) && resourceDentroDoEscopoDaUnidade();
+      allow create: if isAtivo() && isAnyOf(['diretor', 'coordenador', 'admin']) && requestDentroDoEscopoDaUnidade();
+      allow update: if isAtivo() && isAnyOf(['diretor', 'coordenador', 'admin']) && resourceDentroDoEscopoDaUnidade() && requestDentroDoEscopoDaUnidade();
       allow delete: if false;
     }
 

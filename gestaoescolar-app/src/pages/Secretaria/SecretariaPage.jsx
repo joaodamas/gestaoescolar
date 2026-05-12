@@ -48,12 +48,14 @@ function normalizarBusca(valor) {
 }
 
 export default function SecretariaPage() {
-  const { user, perfil } = useAuth()
+  const { user, perfil, escolaId, unidadeAtualId } = useAuth()
   const autor = useMemo(() => ({
     uid: user?.uid,
     nome: perfil?.nome,
     perfil: perfil?.perfil,
-  }), [user?.uid, perfil?.nome, perfil?.perfil])
+    escolaId,
+    unidadeAtualId,
+  }), [user?.uid, perfil?.nome, perfil?.perfil, escolaId, unidadeAtualId])
 
   const [anoLetivo, setAnoLetivo] = useState(ANO_ATUAL)
   const [ensino, setEnsino] = useState('')
@@ -77,7 +79,7 @@ export default function SecretariaPage() {
     setErro('')
     setErrosColecao({})
 
-    listarRegistrosSecretaria({ anoLetivo })
+    listarRegistrosSecretaria({ anoLetivo, escolaId, unidadeAtualId, perfil })
       .then(({ registros: lista, usandoMock: mock, errosColecao: erros }) => {
         if (!ativo) return
         setRegistros(lista)
@@ -96,7 +98,7 @@ export default function SecretariaPage() {
       })
 
     return () => { ativo = false }
-  }, [anoLetivo, recarregar])
+  }, [anoLetivo, recarregar, escolaId, unidadeAtualId, perfil])
 
   const seriesDisponiveis = useMemo(() => {
     const series = registros

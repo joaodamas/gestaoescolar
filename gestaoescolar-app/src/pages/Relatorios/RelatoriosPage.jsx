@@ -12,9 +12,11 @@ import {
   TrendingUp,
   FileSpreadsheet,
   Search,
-  Download,
   Lock,
   FileDown,
+  CheckCircle2,
+  Clock3,
+  Layers3,
 } from 'lucide-react'
 import {
   collection,
@@ -33,9 +35,9 @@ import PageHeader from '../../components/ui/PageHeader'
 import Button from '../../components/ui/Button'
 import { Input, Select } from '../../components/ui/Input'
 import Modal from '../../components/ui/Modal'
+import ModuleHub from '../../components/shared/ModuleHub'
 import {
   Card,
-  Badge,
   Spinner,
   EmptyState,
 } from '../../components/ui/Card'
@@ -63,12 +65,46 @@ const ANOS_LETIVOS = [ANO_ATUAL, ANO_ATUAL - 1, ANO_ATUAL - 2]
 const BIMESTRES = [1, 2, 3, 4]
 
 const RELATORIOS_POR_PERFIL = {
-  diretor:     ['boletim', 'diario', 'frequencia', 'risco', 'faltas', 'ocorrencias', 'orcamento', 'pdde', 'saeb', 'resumo'],
-  coordenador: ['boletim', 'diario', 'frequencia', 'risco', 'faltas', 'ocorrencias', 'saeb'],
+  diretor:     ['boletim', 'diario', 'frequencia', 'risco', 'faltas', 'ocorrencias', 'orcamento', 'pdde', 'saeb', 'resumo', 'busca-ativa', 'pendencias-secretaria', 'auditoria-acessos'],
+  coordenador: ['boletim', 'diario', 'frequencia', 'risco', 'faltas', 'ocorrencias', 'saeb', 'busca-ativa'],
   professor:   ['diario'],
-  admin:       ['orcamento', 'pdde'],
-  secretaria:  ['saeb', 'resumo'],
+  admin:       ['orcamento', 'pdde', 'auditoria-acessos'],
+  secretaria:  ['saeb', 'resumo', 'pendencias-secretaria', 'busca-ativa'],
 }
+
+const STATUS_RELATORIO = {
+  disponivel: { label: 'Disponível', color: 'green', ordem: 0 },
+  parcial: { label: 'Parcial', color: 'yellow', ordem: 1 },
+  planejado: { label: 'Planejado', color: 'blue', ordem: 2 },
+}
+
+const CATEGORIAS_RELATORIO = [
+  {
+    id: 'pedagogico',
+    titulo: 'Pedagógico e turma',
+    descricao: 'Rotinas de emissão para fechamento de notas, boletins e diários.',
+  },
+  {
+    id: 'frequencia-convivencia',
+    titulo: 'Frequência, risco e convivência',
+    descricao: 'Monitoramento de presença, evasão e disciplina para ação rápida da equipe.',
+  },
+  {
+    id: 'financeiro',
+    titulo: 'Financeiro e prestação de contas',
+    descricao: 'Relatórios de execução e acompanhamento de prestações já lançadas na plataforma.',
+  },
+  {
+    id: 'indicadores',
+    titulo: 'Indicadores institucionais',
+    descricao: 'Consolidados executivos e desempenho para acompanhamento de metas.',
+  },
+  {
+    id: 'secretaria-conformidade',
+    titulo: 'Secretaria e conformidade',
+    descricao: 'Frente pendente para documentações, auditoria e trilhas operacionais de conformidade.',
+  },
+]
 
 const CATALOGO_RELATORIOS = [
   {
@@ -77,7 +113,11 @@ const CATALOGO_RELATORIOS = [
     descricao: 'Notas por bimestre, médias e situação final em PDF individual.',
     icon: FileText,
     cor: 'blue',
-    disponivel: true,
+    categoria: 'pedagogico',
+    estado: 'disponivel',
+    escopo: 'Aluno',
+    saida: 'PDF',
+    nota: 'Rotina pronta para consulta individual com filtros por ano letivo e bimestre.',
   },
   {
     id: 'diario',
@@ -85,7 +125,11 @@ const CATALOGO_RELATORIOS = [
     descricao: 'Notas e frequência da turma em PDF (paisagem) e Excel.',
     icon: ClipboardList,
     cor: 'purple',
-    disponivel: true,
+    categoria: 'pedagogico',
+    estado: 'disponivel',
+    escopo: 'Turma',
+    saida: 'PDF + Excel',
+    nota: 'Atende o fechamento operacional de turma com exportação em dois formatos.',
   },
   {
     id: 'frequencia',
@@ -93,7 +137,11 @@ const CATALOGO_RELATORIOS = [
     descricao: 'Percentual de presença mensal por turma e período.',
     icon: CalendarCheck2,
     cor: 'green',
-    disponivel: true,
+    categoria: 'frequencia-convivencia',
+    estado: 'disponivel',
+    escopo: 'Turma',
+    saida: 'PDF + Excel',
+    nota: 'Usa apuração consolidada para leitura rápida de presença legal e presença real.',
   },
   {
     id: 'risco',
@@ -101,7 +149,11 @@ const CATALOGO_RELATORIOS = [
     descricao: 'Alunos com baixo desempenho e alta infrequência.',
     icon: AlertTriangle,
     cor: 'rose',
-    disponivel: true,
+    categoria: 'frequencia-convivencia',
+    estado: 'disponivel',
+    escopo: 'Turma',
+    saida: 'PDF + Excel',
+    nota: 'Lista acionável para coordenação pedagógica acompanhar recuperação e permanência.',
   },
   {
     id: 'faltas',
@@ -109,7 +161,11 @@ const CATALOGO_RELATORIOS = [
     descricao: 'Alunos próximos ou acima do limite legal de faltas.',
     icon: UserMinus,
     cor: 'orange',
-    disponivel: true,
+    categoria: 'frequencia-convivencia',
+    estado: 'disponivel',
+    escopo: 'Turma',
+    saida: 'PDF + Excel',
+    nota: 'Consolida alerta legal para busca ativa e contato com responsáveis.',
   },
   {
     id: 'ocorrencias',
@@ -117,7 +173,11 @@ const CATALOGO_RELATORIOS = [
     descricao: 'Consolidado de ocorrências disciplinares e encaminhamentos.',
     icon: ShieldAlert,
     cor: 'rose',
-    disponivel: true,
+    categoria: 'frequencia-convivencia',
+    estado: 'disponivel',
+    escopo: 'Período',
+    saida: 'PDF + Excel',
+    nota: 'Acesso direto ao consolidado disciplinar já alimentado pelo módulo de ocorrências.',
   },
   {
     id: 'orcamento',
@@ -125,7 +185,11 @@ const CATALOGO_RELATORIOS = [
     descricao: 'Acompanhamento de despesas por categoria orçamentária.',
     icon: Wallet,
     cor: 'green',
-    disponivel: true,
+    categoria: 'financeiro',
+    estado: 'disponivel',
+    escopo: 'Ano letivo',
+    saida: 'PDF + Excel',
+    nota: 'Leitura operacional do realizado, aprovado e pendente por categoria financeira.',
   },
   {
     id: 'pdde',
@@ -133,7 +197,11 @@ const CATALOGO_RELATORIOS = [
     descricao: 'Relatório de prestação de contas do PDDE.',
     icon: ReceiptText,
     cor: 'blue',
-    disponivel: true,
+    categoria: 'financeiro',
+    estado: 'parcial',
+    escopo: 'Programa',
+    saida: 'PDF + Excel',
+    nota: 'Entrega visão inicial de pendências e lançamentos; ainda depende de ampliar cobertura do checklist financeiro.',
   },
   {
     id: 'saeb',
@@ -141,7 +209,11 @@ const CATALOGO_RELATORIOS = [
     descricao: 'Histórico de desempenho no SAEB e metas.',
     icon: TrendingUp,
     cor: 'purple',
-    disponivel: true,
+    categoria: 'indicadores',
+    estado: 'parcial',
+    escopo: 'Histórico',
+    saida: 'PDF + Excel',
+    nota: 'Mostra série histórica e meta vigente, mas ainda sem recortes por segmento ou turma.',
   },
   {
     id: 'resumo',
@@ -149,7 +221,47 @@ const CATALOGO_RELATORIOS = [
     descricao: 'Visão executiva consolidada do mês.',
     icon: FileSpreadsheet,
     cor: 'slate',
-    disponivel: true,
+    categoria: 'indicadores',
+    estado: 'parcial',
+    escopo: 'Mensal',
+    saida: 'PDF + Excel',
+    nota: 'Consolidado já navegável, ainda dependente de amadurecer indicadores de outras frentes da plataforma.',
+  },
+  {
+    id: 'busca-ativa',
+    titulo: 'Busca Ativa e Evasão',
+    descricao: 'Pendência para unificar faltas críticas, risco e histórico de contatos com responsáveis.',
+    icon: AlertTriangle,
+    cor: 'orange',
+    categoria: 'frequencia-convivencia',
+    estado: 'planejado',
+    escopo: 'Aluno',
+    saida: 'Painel + exportação',
+    nota: 'Frente pendente para costurar frequência, secretaria e ocorrências em uma mesma rotina.',
+  },
+  {
+    id: 'pendencias-secretaria',
+    titulo: 'Pendências Documentais',
+    descricao: 'Checklist de matrícula, documentos faltantes e regularização por aluno.',
+    icon: FileText,
+    cor: 'blue',
+    categoria: 'secretaria-conformidade',
+    estado: 'planejado',
+    escopo: 'Aluno',
+    saida: 'Painel + exportação',
+    nota: 'Depende de consolidar a frente de secretaria antes de liberar relatório operacional confiável.',
+  },
+  {
+    id: 'auditoria-acessos',
+    titulo: 'Auditoria de Acessos',
+    descricao: 'Trilha operacional para acessos, reaberturas e evidências de conformidade.',
+    icon: Lock,
+    cor: 'slate',
+    categoria: 'secretaria-conformidade',
+    estado: 'planejado',
+    escopo: 'Evento',
+    saida: 'Painel + exportação',
+    nota: 'Mantido visível no hub para marcar a dependência de auditoria e LGPD ainda não materializada.',
   },
 ]
 
@@ -160,18 +272,57 @@ export default function RelatoriosPage() {
   const [relatorioAberto, setRelatorioAberto] = useState(null)
 
   const perfilUsuario = perfil?.perfil ?? 'professor'
-  const autorizados = RELATORIOS_POR_PERFIL[perfilUsuario] ?? []
+  const autorizados = useMemo(
+    () => RELATORIOS_POR_PERFIL[perfilUsuario] ?? [],
+    [perfilUsuario],
+  )
 
   const relatoriosVisiveis = useMemo(
     () => CATALOGO_RELATORIOS.filter((r) => autorizados.includes(r.id)),
     [autorizados],
   )
 
+  const resumoStatus = useMemo(() => {
+    return Object.entries(STATUS_RELATORIO).map(([chave, config]) => ({
+      chave,
+      ...config,
+      total: relatoriosVisiveis.filter((rel) => rel.estado === chave).length,
+    }))
+  }, [relatoriosVisiveis])
+
+  const secoesVisiveis = useMemo(() => {
+    return CATEGORIAS_RELATORIO.map((categoria) => {
+      const modules = relatoriosVisiveis
+        .filter((relatorio) => relatorio.categoria === categoria.id)
+        .sort((a, b) => STATUS_RELATORIO[a.estado].ordem - STATUS_RELATORIO[b.estado].ordem)
+        .map((relatorio) => ({
+          key: relatorio.id,
+          title: relatorio.titulo,
+          description: relatorio.descricao,
+          icon: relatorio.icon,
+          iconColor: relatorio.cor === 'orange' ? 'yellow' : relatorio.cor === 'rose' ? 'red' : relatorio.cor,
+          status: STATUS_RELATORIO[relatorio.estado].label,
+          statusColor: STATUS_RELATORIO[relatorio.estado].color,
+          metrics: [
+            { label: 'Escopo', value: relatorio.escopo },
+            { label: 'Saída', value: relatorio.saida },
+          ],
+          note: relatorio.nota,
+          disabled: relatorio.estado === 'planejado',
+          onClick: relatorio.estado === 'planejado'
+            ? undefined
+            : () => setRelatorioAberto(relatorio.id),
+        }))
+
+      return { ...categoria, modules }
+    }).filter((categoria) => categoria.modules.length > 0)
+  }, [relatoriosVisiveis])
+
   return (
-    <div className="p-6 bg-slate-50 min-h-full">
+    <div className="min-h-full bg-slate-50 p-6">
       <PageHeader
         titulo="Relatórios"
-        descricao="Gere boletins, diários de classe e relatórios gerenciais"
+        descricao="Hub operacional para emissão, acompanhamento e visualização dos relatórios já liberados ou pendentes"
         icon={BarChart3}
       />
 
@@ -184,12 +335,37 @@ export default function RelatoriosPage() {
           />
         </Card>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {relatoriosVisiveis.map((rel) => (
-            <CardRelatorio
-              key={rel.id}
-              relatorio={rel}
-              onGerar={() => setRelatorioAberto(rel.id)}
+        <div className="space-y-5">
+          <Card className="p-4">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="max-w-3xl">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Leitura operacional</p>
+                <p className="mt-1 text-sm text-slate-700">
+                  O hub agora separa o que já pode ser executado, o que está parcialmente materializado e o que ainda depende de outras frentes do checklist da plataforma.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                {resumoStatus.map((item) => (
+                  <ResumoStatusCard key={item.chave} item={item} />
+                ))}
+              </div>
+            </div>
+          </Card>
+
+          {secoesVisiveis.map((secao) => (
+            <ModuleHub
+              key={secao.id}
+              titulo={secao.titulo}
+              descricao={secao.descricao}
+              columns={3}
+              modules={secao.modules}
+              actions={(
+                <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200">
+                  <Layers3 size={14} />
+                  {secao.modules.length} rotinas
+                </span>
+              )}
             />
           ))}
         </div>
@@ -241,59 +417,29 @@ export default function RelatoriosPage() {
   )
 }
 
-// ─── Card de relatório ───────────────────────────────────────────────────────
+function ResumoStatusCard({ item }) {
+  const Icon = item.chave === 'disponivel'
+    ? CheckCircle2
+    : item.chave === 'parcial'
+      ? Clock3
+      : Lock
 
-function CardRelatorio({ relatorio, onGerar }) {
-  const Icon = relatorio.icon
-  const indisponivel = !relatorio.disponivel
+  const classes = item.color === 'green'
+    ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
+    : item.color === 'yellow'
+      ? 'bg-amber-50 text-amber-700 ring-amber-200'
+      : 'bg-blue-50 text-blue-700 ring-blue-200'
 
   return (
-    <div className="relative bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex flex-col gap-4 hover:shadow-md transition-shadow">
-      <div className="flex items-start gap-3">
-        <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${iconeBg(relatorio.cor)}`}>
-          <Icon size={20} strokeWidth={2.25} />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold text-slate-900">{relatorio.titulo}</h3>
-            {indisponivel && <Badge variante="slate">Em breve</Badge>}
-          </div>
-          <p className="text-xs text-slate-500 mt-1">{relatorio.descricao}</p>
-        </div>
+    <div className={`min-w-[160px] rounded-2xl px-4 py-3 ring-1 ${classes}`}>
+      <div className="flex items-center gap-2">
+        <Icon size={16} />
+        <span className="text-xs font-semibold uppercase tracking-wide">{item.label}</span>
       </div>
-
-      <div className="flex items-center justify-end mt-auto">
-        <div className="group relative">
-          <Button
-            variante="primary"
-            tamanho="sm"
-            icon={Download}
-            onClick={onGerar}
-            disabled={indisponivel}
-          >
-            Gerar
-          </Button>
-          {indisponivel && (
-            <span className="pointer-events-none absolute -top-9 right-0 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-xs text-white opacity-0 shadow group-hover:opacity-100 transition-opacity">
-              Em breve
-            </span>
-          )}
-        </div>
-      </div>
+      <p className="mt-2 text-2xl font-semibold">{item.total}</p>
+      <p className="text-xs">rotinas visíveis no seu perfil</p>
     </div>
   )
-}
-
-function iconeBg(cor) {
-  const mapa = {
-    blue: 'bg-blue-100 text-blue-600',
-    green: 'bg-emerald-100 text-emerald-600',
-    purple: 'bg-purple-100 text-purple-600',
-    orange: 'bg-orange-100 text-orange-600',
-    rose: 'bg-rose-100 text-rose-600',
-    slate: 'bg-slate-100 text-slate-600',
-  }
-  return mapa[cor] || mapa.slate
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

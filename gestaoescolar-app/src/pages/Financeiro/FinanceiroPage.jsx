@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import {
   listarLancamentos,
@@ -94,7 +94,7 @@ function Spinner({ size = 6 }) {
 // ─── Modal de lançamento ──────────────────────────────────────────────────────
 
 function ModalLancamento({ tipo, onClose, onSalvo, orcamentoPrevisto, totalDespesasAprovadas, limiteComprovante }) {
-  const { user } = useAuth()
+  const { user, perfil, escolaId, unidadeAtualId } = useAuth()
 
   const formInicial = {
     categoria: '',
@@ -117,6 +117,7 @@ function ModalLancamento({ tipo, onClose, onSalvo, orcamentoPrevisto, totalDespe
   const precisaComprov   = valorNum > limiteComprovante
   const comprovFaltando  = precisaComprov && !arquivo
   const bloqueado        = salvando || saldoNegativo || comprovFaltando
+  const escopo = { escolaId, unidadeAtualId, perfil }
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -129,7 +130,7 @@ function ModalLancamento({ tipo, onClose, onSalvo, orcamentoPrevisto, totalDespe
     setSalvando(true)
     try {
       // Cria o documento primeiro para obter o ID
-      const docRef = await criarLancamento({ ...form, tipo, valor: valorNum }, user.uid)
+      const docRef = await criarLancamento({ ...form, tipo, valor: valorNum }, user.uid, escopo)
 
       // Upload de comprovante se houver arquivo
       if (arquivo) {
@@ -307,7 +308,8 @@ function ModalLancamento({ tipo, onClose, onSalvo, orcamentoPrevisto, totalDespe
 // ─── Página principal ─────────────────────────────────────────────────────────
 
 export default function FinanceiroPage() {
-  const { user, perfil } = useAuth()
+  const { user, perfil, escolaId, unidadeAtualId } = useAuth()
+  const escopo = useMemo(() => ({ escolaId, unidadeAtualId, perfil }), [escolaId, unidadeAtualId, perfil])
 
   // Guard de perfil
   if (!perfil || !PERFIS_PERMITIDOS.includes(perfil.perfil)) {
@@ -357,8 +359,8 @@ export default function FinanceiroPage() {
         ...(filtroMes       && { mes: Number(filtroMes) }),
       }
       const [lista, totaisCalc, cfg] = await Promise.all([
-        listarLancamentos(filtros),
-        calcularTotais(filtroAno || ANO_ATUAL),
+        listarLancamentos({ ...filtros, ...escopo }),
+        calcularTotais(filtroAno || ANO_ATUAL, escopo),
         buscarConfiguracoes(),
       ])
       setLancamentos(lista)
@@ -370,7 +372,7 @@ export default function FinanceiroPage() {
     } finally {
       setCarregando(false)
     }
-  }, [filtroTipo, filtroCategoria, filtroStatus, filtroCusto, filtroAno, filtroMes])
+  }, [filtroTipo, filtroCategoria, filtroStatus, filtroCusto, filtroAno, filtroMes, escopo])
 
   useEffect(() => { carregar() }, [carregar])
 

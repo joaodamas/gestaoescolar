@@ -217,12 +217,13 @@ function ModalNovaAvaliacao({ onClose, onSalvar, salvando }) {
 // ─── Componente principal ────────────────────────────────────────────────────
 
 export default function NotasPage() {
-  const { user, perfil } = useAuth()
+  const { user, perfil, escolaId, unidadeAtualId } = useAuth()
 
   const perfilTipo = perfil?.perfil ?? ''
   const isProfessor = perfilTipo === 'professor'
   const isGestor = ['diretor', 'coordenador', 'admin'].includes(perfilTipo)
   const podeAprovarConselho = ['diretor', 'coordenador'].includes(perfilTipo)
+  const escopo = useMemo(() => ({ escolaId, unidadeAtualId, perfil }), [escolaId, unidadeAtualId, perfil])
 
   // ── Filtros ────────────────────────────────────────────────────────────────
   const [turmas, setTurmas]           = useState([])
@@ -264,7 +265,7 @@ export default function NotasPage() {
 
   // ── Carrega turmas ─────────────────────────────────────────────────────────
   useEffect(() => {
-    listarTurmas(ANO_LETIVO).then(todas => {
+    listarTurmas(ANO_LETIVO, escopo).then(todas => {
       if (isGestor) {
         setTurmas(todas)
         return
@@ -276,7 +277,7 @@ export default function NotasPage() {
       console.error(err)
       setMsgErro('Erro ao carregar turmas. Verifique permissões/índices.')
     })
-  }, [])
+  }, [escopo, isGestor, perfil?.turmas_ids])
 
   useEffect(() => {
     buscarConfiguracoes()
@@ -296,7 +297,7 @@ export default function NotasPage() {
   // ── Carrega disciplinas quando turma muda ──────────────────────────────────
   useEffect(() => {
     if (!turmaSel) { setDisciplinas([]); setDiscSel(''); return }
-    listarDisciplinasDaTurma(turmaSel, ANO_LETIVO).then(lista => {
+    listarDisciplinasDaTurma(turmaSel, ANO_LETIVO, escopo).then(lista => {
       setDisciplinas(lista)
       setDiscSel('')
     }).catch(err => {
@@ -305,13 +306,13 @@ export default function NotasPage() {
       setDiscSel('')
       setMsgErro('Erro ao carregar disciplinas. Verifique permissões/índices.')
     })
-  }, [turmaSel])
+  }, [turmaSel, escopo])
 
   // ── Carrega alunos quando turma muda ──────────────────────────────────────
   useEffect(() => {
     if (!turmaSel) { setAlunos([]); return }
     setCarregandoAlunos(true)
-    listarMatriculasDaTurma(turmaSel, ANO_LETIVO)
+    listarMatriculasDaTurma(turmaSel, ANO_LETIVO, escopo)
       .then(matriculas => {
         const lista = matriculas
           .map(alunoResumoDaMatricula)
@@ -326,7 +327,7 @@ export default function NotasPage() {
         setMsgErro('Erro ao carregar alunos da turma. Verifique permissões/índices.')
       })
       .finally(() => setCarregandoAlunos(false))
-  }, [turmaSel])
+  }, [turmaSel, escopo])
 
   // ── Carrega avaliações e notas quando filtros completos mudam ──────────────
   useEffect(() => {
@@ -345,13 +346,13 @@ export default function NotasPage() {
 
     async function carregar() {
       const [avals] = await Promise.all([
-        listarAvaliacoes(turmaSel, discSel, bimestre, ANO_LETIVO),
+        listarAvaliacoes(turmaSel, discSel, bimestre, ANO_LETIVO, escopo),
       ])
       setAvaliacoes(avals)
 
       // Carrega notas de todas as avaliações em paralelo
       const todasNotas = (
-        await Promise.all(avals.map(a => listarNotas(a.id)))
+        await Promise.all(avals.map(a => listarNotas(a.id, escopo)))
       ).flat()
 
       const mapa = {}
@@ -386,7 +387,7 @@ export default function NotasPage() {
       setConselhoMap({})
       setMsgErro('Erro ao carregar avaliações/notas. Verifique permissões/índices.')
     }).finally(() => setCarregandoAvaliacoes(false))
-  }, [turmaSel, discSel, bimestre])
+  }, [turmaSel, discSel, bimestre, escopo])
 
   // ── Permissão de edição ────────────────────────────────────────────────────
   const podeEditar = isGestor || (!bimestreFechado && isProfessor)
@@ -489,7 +490,8 @@ export default function NotasPage() {
               ANO_LETIVO,
               nota,
               user.uid,
-              extras
+              extras,
+              escopo
             )
           })
         })
@@ -538,7 +540,7 @@ export default function NotasPage() {
     setFechandoBim(true)
     setMsgErro('')
     try {
-      await fecharBimestre(turmaSel, discSel, bimestre, ANO_LETIVO, user.uid)
+      await fecharBimestre(turmaSel, discSel, bimestre, ANO_LETIVO, user.uid, escopo)
       setBimestreFechado(true)
       setModoEdicao(false)
       setMsgSucesso(`${bimestre}° bimestre fechado com sucesso.`)
@@ -561,9 +563,9 @@ export default function NotasPage() {
         disciplina_id: discSel,
         bimestre,
         ano_letivo: ANO_LETIVO,
-      })
+      }, escopo)
       // Recarrega avaliações
-      const avals = await listarAvaliacoes(turmaSel, discSel, bimestre, ANO_LETIVO)
+      const avals = await listarAvaliacoes(turmaSel, discSel, bimestre, ANO_LETIVO, escopo)
       setAvaliacoes(avals)
       setShowModal(false)
       setMsgSucesso('Avaliação criada com sucesso!')

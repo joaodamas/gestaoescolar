@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { getDoc, doc } from 'firebase/firestore'
 import { db } from '../../firebase/firebase'
 import { useAuth } from '../../context/AuthContext'
@@ -122,9 +122,10 @@ function hoje() {
 // ---------------------------------------------------------------------------
 
 export default function OcorrenciasPage() {
-  const { user, perfil } = useAuth()
+  const { user, perfil, escolaId, unidadeAtualId } = useAuth()
   const tipoPerfil = perfil?.perfil ?? ''
   const ehProfessor = tipoPerfil === 'professor'
+  const escopo = useMemo(() => ({ escolaId, unidadeAtualId, perfil }), [escolaId, unidadeAtualId, perfil])
 
   // --- contadores ---
   const [contagens, setContagens] = useState({
@@ -151,8 +152,8 @@ export default function OcorrenciasPage() {
   // Efeito: carregar contagens
   // ---------------------------------------------------------------------------
   useEffect(() => {
-    contarPorTipo(tipoPerfil).then(setContagens).catch(console.error)
-  }, [tipoPerfil])
+    contarPorTipo(tipoPerfil, escopo).then(setContagens).catch(console.error)
+  }, [tipoPerfil, escopo])
 
   // ---------------------------------------------------------------------------
   // Efeito: carregar lista de ocorrências
@@ -167,7 +168,7 @@ export default function OcorrenciasPage() {
         dataInicio: filtroDataInicio || undefined,
         dataFim: filtroDataFim || undefined,
       }
-      const dados = await listarOcorrencias(tipoPerfil, filtros)
+      const dados = await listarOcorrencias(tipoPerfil, { ...filtros, ...escopo })
       // Enriquece registros antigos que não têm aluno_nome / registrado_por_nome
       const enriquecidos = await enriquecerOcorrencias(dados)
       setOcorrencias(enriquecidos)
@@ -176,7 +177,7 @@ export default function OcorrenciasPage() {
     } finally {
       setCarregando(false)
     }
-  }, [tipoPerfil, filtroTipo, filtroStatus, filtroGravidade, filtroDataInicio, filtroDataFim])
+  }, [tipoPerfil, filtroTipo, filtroStatus, filtroGravidade, filtroDataInicio, filtroDataFim, escopo])
 
   useEffect(() => {
     carregarLista()
@@ -210,7 +211,7 @@ export default function OcorrenciasPage() {
   function handleOcorrenciaCriada() {
     setModalNova(false)
     carregarLista()
-    contarPorTipo(tipoPerfil).then(setContagens).catch(console.error)
+    contarPorTipo(tipoPerfil, escopo).then(setContagens).catch(console.error)
   }
 
   // ---------------------------------------------------------------------------
@@ -492,10 +493,10 @@ export default function OcorrenciasPage() {
       {/* ── Modal Nova Ocorrência ── */}
       {modalNova && (
         <ModalNovaOcorrencia
-          perfil={tipoPerfil}
           usuarioId={user?.uid}
           ehProfessor={ehProfessor}
           tiposVisiveis={tiposVisiveis}
+          escopo={escopo}
           onClose={() => setModalNova(false)}
           onSucesso={handleOcorrenciaCriada}
         />
@@ -623,7 +624,7 @@ const FORM_INICIAL = {
   data_ocorrencia: hoje(),
 }
 
-function ModalNovaOcorrencia({ perfil, usuarioId, ehProfessor, tiposVisiveis, onClose, onSucesso }) {
+function ModalNovaOcorrencia({ usuarioId, ehProfessor, tiposVisiveis, escopo, onClose, onSucesso }) {
   const [form, setForm] = useState(FORM_INICIAL)
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
@@ -656,7 +657,7 @@ function ModalNovaOcorrencia({ perfil, usuarioId, ehProfessor, tiposVisiveis, on
     debounceRef.current = setTimeout(async () => {
       setBuscando(true)
       try {
-        const resultados = await buscarAlunos(termoBusca)
+        const resultados = await buscarAlunos(termoBusca, escopo)
         setResultadosBusca(resultados)
         setDropdownAberto(resultados.length > 0)
       } catch (err) {
@@ -714,7 +715,8 @@ function ModalNovaOcorrencia({ perfil, usuarioId, ehProfessor, tiposVisiveis, on
           gravidade: form.gravidade,
           notificado_responsavel: form.notificado_responsavel,
         },
-        usuarioId
+        usuarioId,
+        escopo,
       )
       onSucesso()
     } catch (err) {

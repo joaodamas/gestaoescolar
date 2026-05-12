@@ -12,6 +12,7 @@ import {
 } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage } from '../firebase/firebase'
+import { comEscopoEscolar, filtrarListaPorEscopo } from './escopo'
 
 /**
  * Lista lançamentos financeiros com filtros opcionais.
@@ -30,7 +31,7 @@ export async function listarLancamentos(filtros = {}) {
 
   const q = query(ref_, ...condicoes, orderBy('data_lancamento', 'desc'))
   const snap = await getDocs(q)
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+  return filtrarListaPorEscopo(snap.docs.map(d => ({ id: d.id, ...d.data() })), filtros)
 }
 
 /**
@@ -38,11 +39,11 @@ export async function listarLancamentos(filtros = {}) {
  * @param {Object} dados - Campos do lançamento (sem status, created_by, created_at)
  * @param {string} usuarioId - UID do usuário que está criando
  */
-export async function criarLancamento(dados, usuarioId) {
+export async function criarLancamento(dados, usuarioId, contexto = {}) {
   const dataLancamento = dados.data_lancamento ?? new Date().toISOString().split('T')[0]
   const [ano, mesStr] = dataLancamento.split('-')
 
-  return addDoc(collection(db, 'financeiro_lancamentos'), {
+  return addDoc(collection(db, 'financeiro_lancamentos'), comEscopoEscolar({
     tipo: dados.tipo,
     categoria: dados.categoria ?? '',
     subcategoria: dados.subcategoria ?? '',
@@ -57,7 +58,7 @@ export async function criarLancamento(dados, usuarioId) {
     mes: Number(mesStr),
     created_by: usuarioId,
     created_at: serverTimestamp(),
-  })
+  }, contexto))
 }
 
 /**
@@ -89,7 +90,7 @@ export async function cancelarLancamento(id) {
  * @param {number} ano
  * @returns {{ totalReceitas, totalDespesas, saldoDisponivel }}
  */
-export async function calcularTotais(ano) {
+export async function calcularTotais(ano, contexto = {}) {
   const q = query(
     collection(db, 'financeiro_lancamentos'),
     where('ano', '==', Number(ano)),
@@ -100,8 +101,7 @@ export async function calcularTotais(ano) {
   let totalReceitas = 0
   let totalDespesas = 0
 
-  snap.docs.forEach(d => {
-    const dado = d.data()
+  filtrarListaPorEscopo(snap.docs.map(d => ({ id: d.id, ...d.data() })), contexto).forEach((dado) => {
     if (dado.tipo === 'receita')  totalReceitas += Number(dado.valor)
     if (dado.tipo === 'despesa')  totalDespesas += Number(dado.valor)
   })

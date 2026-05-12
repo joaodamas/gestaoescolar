@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { collection, query, where, orderBy, getDocs, doc, getDoc, limit } from 'firebase/firestore'
 import { db } from '../../firebase/firebase'
 import { listarResponsaveis } from '../../services/responsaveis'
@@ -13,7 +13,7 @@ import { AlunoLGPDDocumento } from './documentos/AlunoLGPDDocumento'
 import {
   User, Heart, BookOpen, Calendar, Users as UsersIcon,
   GraduationCap, AlertTriangle, MapPin, Mail, Phone,
-  FileText, ShieldCheck, TrendingUp, Activity
+  FileText, ShieldCheck, TrendingUp
 } from 'lucide-react'
 import Modal from '../../components/ui/Modal'
 import { Badge, EmptyState, Spinner } from '../../components/ui/Card'
@@ -32,7 +32,8 @@ const STATUS_OCORR = {
 }
 
 export default function PerfilAlunoModal({ aluno, aberto, onFechar }) {
-  const { user, perfil } = useAuth()
+  const { user, perfil, escolaId, unidadeAtualId } = useAuth()
+  const escopo = useMemo(() => ({ escolaId, unidadeAtualId, perfil }), [escolaId, unidadeAtualId, perfil])
   const [aba, setAba] = useState('dados')
   const [responsaveis, setResponsaveis] = useState([])
   const [historico, setHistorico] = useState([])
@@ -59,11 +60,11 @@ export default function PerfilAlunoModal({ aluno, aberto, onFechar }) {
       setCarregando(true)
       try {
         // Responsáveis
-        const resps = await listarResponsaveis(aluno.id)
+        const resps = await listarResponsaveis(aluno.id, escopo)
         setResponsaveis(resps)
 
         // Histórico de matrículas
-        const matriculas = await listarMatriculasDoAluno(aluno.id)
+        const matriculas = await listarMatriculasDoAluno(aluno.id, escopo)
         setHistorico(matriculas)
 
         // Turmas (para mostrar nome)
@@ -79,7 +80,7 @@ export default function PerfilAlunoModal({ aluno, aberto, onFechar }) {
         const presSnap = await getDocs(query(collection(db, 'presencas'), where('aluno_id', '==', aluno.id)))
         const registrosPresenca = presSnap.docs.map(d => d.data())
         const anosPresenca = [...new Set(registrosPresenca.map(p => Number(p.ano_letivo) || Number(p.data?.slice(0, 4))).filter(Boolean))]
-        const eventosCalendario = (await Promise.all(anosPresenca.map(ano => listarCalendario(ano)))).flat()
+        const eventosCalendario = (await Promise.all(anosPresenca.map(ano => listarCalendario(ano, escopo)))).flat()
         setPresencas(resumirFrequencia(registrosPresenca, eventosCalendario))
 
         // Últimas notas
@@ -106,7 +107,7 @@ export default function PerfilAlunoModal({ aluno, aberto, onFechar }) {
     }
 
     carregarDados()
-  }, [aberto, aluno])
+  }, [aberto, aluno, escopo])
 
   useEffect(() => {
     if (!aberto || !aluno?.id || !user?.uid) return

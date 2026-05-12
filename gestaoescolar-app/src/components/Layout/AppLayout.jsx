@@ -2,10 +2,12 @@ import { Outlet } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
 import { Menu } from 'lucide-react'
 import Sidebar from './Sidebar'
+import { useAuth } from '../../context/AuthContext'
 
 const BREAKPOINT_LG = '(min-width: 1024px)'
 
 export default function AppLayout() {
+  const { unidadeAtual } = useAuth()
   const [sidebarAberta, setSidebarAberta] = useState(false)
   const menuButtonRef = useRef(null)
   const mainRef = useRef(null)
@@ -27,6 +29,7 @@ export default function AppLayout() {
   useEffect(() => {
     if (!sidebarAberta) return
     if (typeof document === 'undefined') return
+    const menuButton = menuButtonRef.current
 
     const overflowAnterior = document.body.style.overflow
     document.body.style.overflow = 'hidden'
@@ -43,7 +46,7 @@ export default function AppLayout() {
       document.body.style.overflow = overflowAnterior
       document.removeEventListener('keydown', handleKey)
       // Devolve o foco para o botão que abriu o menu.
-      if (menuButtonRef.current) menuButtonRef.current.focus()
+      if (menuButton) menuButton.focus()
     }
   }, [sidebarAberta])
 
@@ -79,7 +82,9 @@ export default function AppLayout() {
           </button>
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-slate-900">Gestão Escolar</p>
-            <p className="text-xs text-slate-500">À Vista · v2.0</p>
+            <p className="truncate text-xs text-slate-500">
+              {unidadeAtual ? `Voce esta acessando ${unidadeAtual.nome}` : 'À Vista · v2.0'}
+            </p>
           </div>
         </div>
 

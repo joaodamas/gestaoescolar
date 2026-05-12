@@ -17,8 +17,9 @@ import Modal from '../../components/ui/Modal'
 const ANO_LETIVO = new Date().getFullYear()
 
 export default function DisciplinasPage() {
-  const { user, perfil } = useAuth()
+  const { user, perfil, escolaId, unidadeAtualId } = useAuth()
   const podeGerenciar = ['diretor', 'coordenador'].includes(perfil?.perfil)
+  const escopo = useMemo(() => ({ escolaId, unidadeAtualId, perfil }), [escolaId, unidadeAtualId, perfil])
 
   const [disciplinas, setDisciplinas] = useState([])
   const [turmas, setTurmas] = useState([])
@@ -72,23 +73,24 @@ export default function DisciplinasPage() {
       (err) => {
         setErroQuery(err.message ?? 'Falha ao carregar disciplinas. Verifique permissões/índices.')
         setCarregando(false)
-      }
+      },
+      escopo,
     )
     return unsub
-  }, [filtroAno, filtroTurma, filtroProfessor, filtroStatus])
+  }, [filtroAno, filtroTurma, filtroProfessor, filtroStatus, escopo])
 
   // ─── Carrega listas auxiliares (turmas + professores) ────────────────────
   useEffect(() => {
-    listarTodasTurmas(Number(filtroAno))
+    listarTodasTurmas(Number(filtroAno), escopo)
       .then(setTurmas)
       .catch(err => console.error('Erro ao listar turmas:', err))
-  }, [filtroAno])
+  }, [filtroAno, escopo])
 
   useEffect(() => {
-    listarUsuarios({ perfil: 'professor', ativo: true })
+    listarUsuarios({ perfil: 'professor', ativo: true, ...escopo })
       .then(setProfessores)
       .catch(err => console.error('Erro ao listar professores:', err))
-  }, [])
+  }, [escopo])
 
   // ─── Filtro client-side pela busca textual ───────────────────────────────
   const disciplinasFiltradas = useMemo(() => {
@@ -152,7 +154,7 @@ export default function DisciplinasPage() {
       if (editando) {
         await atualizarDisciplina(editando, dados)
       } else {
-        await criarDisciplina(dados, user?.uid)
+        await criarDisciplina(dados, user?.uid, escopo)
       }
       setModalAberto(false)
     } catch (err) {

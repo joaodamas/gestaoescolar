@@ -473,8 +473,8 @@
 ### FASE 12.1 — Contexto Escolar / Unidade 🟠 ALTA
 - [ ] Criar seletor de escola/unidade atual inspirado em "Você está acessando"
 - [ ] Persistir `escola_id`/`unidade_id` nos principais documentos
-- [ ] Filtrar todas as queries por escola/unidade ativa
-- [ ] Atualizar Firestore Rules para impedir acesso cruzado entre unidades
+- [~] Filtrar todas as queries por escola/unidade ativa
+- [~] Atualizar Firestore Rules para impedir acesso cruzado entre unidades
 - [ ] Permitir usuário vinculado a múltiplas unidades
 
 ### Diretriz de Produto / UX
@@ -767,7 +767,7 @@
   - [ ] `auditarAcaoCallable` — criado no código, deploy pendente
 
 ### Próximas prioridades imediatas:
-1. ~~**🔴 Arquitetar Fase 12 antes de criar telas**~~ — Secretaria 12.2 entregue como primeira fatia: SearchPanel/DataActionTable/ModuleHub + workflow de intenção→matrícula + declaração PDF + rules + índices
+1. ~~**🔴 Arquitetar Fase 12 antes de criar telas**~~ — fundação inicial entregue nesta rodada: hubs/rotas-base, matriz de perfis, contexto de unidade no frontend e carimbo progressivo de `escola_id`/`unidade_id`; multiunidade completo, filtros por unidade e endurecimento de rules ainda pendentes
 2. **🟠 Diário de Classe Avançado** — visão semanal, atribuição de horário, pendências, deferimento, fechamento e assinatura
 3. **🟠 Saúde/NDPD** — módulo separado, permissão própria, auditoria obrigatória e convênio médico estudante
 4. **🟠 Auditoria Fase 9** — triggers obrigatórios pendentes (edição de presença 48h, reabertura de bimestre, conselho, mudança de perfil, inativação de aluno)
@@ -783,6 +783,17 @@
 - [x] **Fix bloqueante:** parser error em `SecretariaPage.jsx` (mistura `??` + `||`) e regex de diacríticos corrigida para `̀-ͯ`
 - [x] **Secretaria 12.2:** `services/intencoesVaga.js` com ciclo de vida + histórico + auditoria, `services/secretaria.js` com `Promise.allSettled` propagando erros por coleção e removendo `raw:dados`, modal de nova intenção (4 abas), modal de detalhe com timeline + workflow + conversão→matrícula, declaração de matrícula em PDF, regra Firestore para `intencoes_vaga` + ampliação de `matriculas` para admin/secretaria, índices compostos novos
 
+### Bloco 2026-05-12 — Fundacao Fase 12 (arquitetura inicial)
+- [x] **Rotas agrupadas iniciais:** adicionadas `/diario`, `/saude`, `/nutricao`, `/colegio`, `/paesp`, `/integracoes` e `/supervisao` com hubs de estruturacao
+- [x] **Matriz inicial de perfis operacionais:** `MODULOS_POR_PERFIL` expandido para `supervisor`, `saude`, `nutricao` e `transporte`
+- [x] **Contexto de unidade no frontend:** `AuthContext` agora resolve lista de unidades, persiste selecao local e exibe "Você está acessando" no menu
+- [x] **Carimbo progressivo de escopo:** novos writes centrais agora gravam `escola_id` e `unidade_id` em usuários, secretaria, alunos, responsáveis, matrículas, turmas, disciplinas, calendário, financeiro, projetos, pendências e ocorrências
+- [x] **Compatibilidade controlada em rules:** próprio usuário pode persistir `unidade_atual_id` sem abrir escrita ampla no documento `/usuarios`
+- [~] **Multiunidade em progresso:** leituras centrais e módulos operacionais principais agora aplicam `escopo` no frontend/services (`alunos`, `turmas`, `disciplinas`, `calendário`, `financeiro`, `ocorrências`, `dashboard`, `secretaria`, `chamada` e `notas`), e `presencas`/`avaliacoes`/`notas` passaram a exigir escopo compatível nas rules
+- [ ] **Pendência mantida em multiunidade:** backfill dos documentos legados, queries restantes de relatórios/perfil detalhado, dados de auditoria, e isolamento completo por unidade no backend/queries compostas
+- [ ] **Pendência mantida em Storage:** padronizar caminhos seguros, metadados de escopo e política de acesso antes de anexos em Saúde/Documentos/Funcionários
+- [ ] **Pendência mantida em LGPD:** URLs temporárias assinadas, retenção/expurgo e processo operacional para dados sensíveis continuam fora desta entrega
+
 ### Fora do checklist original — pendências encontradas em 11/05/2026
 - [x] Centralizar a matriz `MODULOS_POR_PERFIL` para não duplicar em `Sidebar.jsx` e `PrivateRoute.jsx`
 - [x] Revisar permissões reais de professor para disciplinas/relatórios: menu não mostra Disciplinas, mas Notas depende delas
@@ -797,4 +808,4 @@
 
 ---
 
-*Atualizado em: 11/05/2026 · Baseado na Documentação Técnica v2.0 + design de referência*
+*Atualizado em: 12/05/2026 · Baseado na Documentação Técnica v2.0 + design de referência*

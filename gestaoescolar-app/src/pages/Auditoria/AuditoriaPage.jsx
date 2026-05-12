@@ -83,8 +83,9 @@ function tempoRelativo(ts) {
 }
 
 export default function AuditoriaPage() {
-  const { perfil } = useAuth()
+  const { perfil, escolaId, unidadeAtualId } = useAuth()
   const podeAcessar = ['diretor', 'admin'].includes(perfil?.perfil)
+  const escopo = useMemo(() => ({ escolaId, unidadeAtualId, perfil }), [escolaId, unidadeAtualId, perfil])
 
   const [registros, setRegistros] = useState([])
   const [usuarios, setUsuarios] = useState([])
@@ -113,8 +114,8 @@ export default function AuditoriaPage() {
 
   useEffect(() => {
     if (!podeAcessar) return
-    listarUsuarios().then(setUsuarios).catch(() => setUsuarios([]))
-  }, [podeAcessar])
+    listarUsuarios(escopo).then(setUsuarios).catch(() => setUsuarios([]))
+  }, [podeAcessar, escopo])
 
   const usuariosMap = useMemo(() => Object.fromEntries(usuarios.map(u => [u.id, u])), [usuarios])
 

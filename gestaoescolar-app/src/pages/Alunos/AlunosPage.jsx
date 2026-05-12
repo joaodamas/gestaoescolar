@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { collection, query, where, orderBy, onSnapshot, getDocs } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage } from '../../firebase/firebase'
@@ -7,6 +7,7 @@ import { criarAluno, atualizarAluno } from '../../services/alunos'
 import { criarMatricula, atualizarMatricula, montarResumoAlunoMatricula } from '../../services/matriculas'
 import { listarResponsaveis, criarResponsavel, atualizarResponsavel } from '../../services/responsaveis'
 import { listarTurmas } from '../../services/turmas'
+import { filtrarListaPorEscopo } from '../../services/escopo'
 import { mascararCPF, formatarCPF, formatarTelefone, validarCPF } from '../../utils/mascaramento'
 import { consultarCEP, formatarCEP } from '../../utils/cep'
 import { exportarParaExcel, formatarParaExportacao } from '../../utils/exportExcel'
@@ -31,7 +32,8 @@ const STATUS_BADGE = {
 }
 
 export default function AlunosPage() {
-  const { user } = useAuth()
+  const { user, perfil, escolaId, unidadeAtualId } = useAuth()
+  const escopo = useMemo(() => ({ escolaId, unidadeAtualId, perfil }), [escolaId, unidadeAtualId, perfil])
 
   const [alunos, setAlunos] = useState([])
   const [turmas, setTurmas] = useState([])
@@ -89,7 +91,7 @@ export default function AlunosPage() {
     const unsub = onSnapshot(
       q,
       async (snap) => {
-        const lista = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        const lista = filtrarListaPorEscopo(snap.docs.map(d => ({ id: d.id, ...d.data() })), escopo)
         if (!ativo || carregamentoSeq.current !== execucao) return
         setAlunos(lista)
 
@@ -103,7 +105,8 @@ export default function AlunosPage() {
               where('status', '==', 'ativa')
             )
             const mSnap = await getDocs(mq)
-            if (!mSnap.empty) mMap[aluno.id] = { id: mSnap.docs[0].id, ...mSnap.docs[0].data() }
+            const matriculas = filtrarListaPorEscopo(mSnap.docs.map(d => ({ id: d.id, ...d.data() })), escopo)
+            if (matriculas.length > 0) mMap[aluno.id] = matriculas[0]
           } catch (e) {
             console.warn('matricula query falhou para', aluno.id, e.message)
           }
@@ -126,7 +129,7 @@ export default function AlunosPage() {
     }
   }, [filtroStatus])
 
-  useEffect(() => { listarTurmas(ANO_LETIVO).then(setTurmas) }, [])
+  useEffect(() => { listarTurmas(ANO_LETIVO, escopo).then(setTurmas) }, [escopo])
 
   const alunosFiltrados = alunos.filter(a => {
     const termo = busca.toLowerCase()
@@ -168,7 +171,7 @@ export default function AlunosPage() {
   async function abrirEditarAluno(aluno) {
     const saude = aluno.saude ?? {}
     const endereco = aluno.endereco ?? {}
-    const responsaveis = await listarResponsaveis(aluno.id).catch(() => [])
+    const responsaveis = await listarResponsaveis(aluno.id, escopo).catch(() => [])
     const responsavel = responsaveis[0] ?? null
     setEditandoAluno(aluno)
     setEditandoResponsavelId(responsavel?.id ?? null)
@@ -300,7 +303,7 @@ export default function AlunosPage() {
     try {
       const fotoUrl = await resolverFotoUrl()
       const dadosAluno = montarDadosAluno(fotoUrl)
-      const alunoRef = await criarAluno(dadosAluno, user.uid, form.resp_consentimento)
+      const alunoRef = await criarAluno(dadosAluno, user.uid, form.resp_consentimento, escopo)
 
       await criarResponsavel({
         aluno_id: alunoRef.id,
@@ -312,7 +315,7 @@ export default function AlunosPage() {
         responsavel_financeiro: form.resp_financeiro,
         responsavel_pedagogico: form.resp_pedagogico,
         consentimento_lgpd: form.resp_consentimento,
-      })
+      }, escopo)
 
       await criarMatricula(
         alunoRef.id,
@@ -320,6 +323,7 @@ export default function AlunosPage() {
         form.ano_letivo,
         user.uid,
         montarResumoAlunoMatricula(dadosAluno),
+        escopo,
       )
 
       setDrawerAberto(false)
@@ -369,7 +373,7 @@ export default function AlunosPage() {
       if (editandoResponsavelId) {
         await atualizarResponsavel(editandoResponsavelId, dadosResponsavel)
       } else if (dadosResponsavel.nome) {
-        await criarResponsavel(dadosResponsavel)
+        await criarResponsavel(dadosResponsavel, escopo)
       }
 
       setDrawerAberto(false)

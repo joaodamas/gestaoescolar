@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { doc, onSnapshot } from 'firebase/firestore'
 import { db } from '../../firebase/firebase'
 import { useAuth } from '../../context/AuthContext'
@@ -58,7 +58,8 @@ const EVENTOS_CONFIG = {
 }
 
 export default function DashboardPage() {
-  const { perfil } = useAuth()
+  const { perfil, escolaId, unidadeAtualId } = useAuth()
+  const escopo = useMemo(() => ({ escolaId, unidadeAtualId, perfil }), [escolaId, unidadeAtualId, perfil])
   const [indicadores, setIndicadores] = useState(null)
   const [config, setConfig] = useState(null)
   const [projetos, setProjetos] = useState([])
@@ -87,10 +88,10 @@ export default function DashboardPage() {
 
   useEffect(() => {
     buscarConfiguracoes().then(setConfig)
-    listarProjetosDashboard(5).then(setProjetos).catch(() => setProjetos([]))
-    listarPendenciasDashboard(5).then(setPendencias).catch(() => setPendencias([]))
-    listarProximosEventos(5, ANO_LETIVO).then(setEventos).catch(() => setEventos([]))
-  }, [])
+    listarProjetosDashboard(5, escopo).then(setProjetos).catch(() => setProjetos([]))
+    listarPendenciasDashboard(5, escopo).then(setPendencias).catch(() => setPendencias([]))
+    listarProximosEventos(5, ANO_LETIVO, escopo).then(setEventos).catch(() => setEventos([]))
+  }, [escopo])
 
   const presencaPct = +(indicadores?.presenca_media ?? 0)
   const ausenciaPct = +(indicadores?.ausencia_media ?? 0)

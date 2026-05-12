@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Clock, AlertCircle, ArrowRightCircle, FileBadge, Printer,
   Mail, Phone, User, MapPin, Building2
@@ -15,6 +15,7 @@ import {
 import { listarTurmas } from '../../services/turmas'
 import { buscarConfiguracoes } from '../../services/configuracoes'
 import { gerarDeclaracaoMatricula } from './declaracaoPdf'
+import { useAuth } from '../../context/AuthContext'
 
 function formatarTimestamp(valor) {
   if (!valor) return '—'
@@ -74,6 +75,8 @@ function CampoLinha({ icone: Icone, label, valor }) {
 }
 
 export default function DetalheRegistroModal({ aberto, onFechar, registro, autor, onAtualizado }) {
+  const { perfil, escolaId, unidadeAtualId } = useAuth()
+  const escopo = useMemo(() => ({ escolaId, unidadeAtualId, perfil }), [escolaId, unidadeAtualId, perfil])
   const [intencao, setIntencao] = useState(null)
   const [carregando, setCarregando] = useState(false)
   const [novaSituacao, setNovaSituacao] = useState('')
@@ -118,10 +121,10 @@ export default function DetalheRegistroModal({ aberto, onFechar, registro, autor
   useEffect(() => {
     if (!aberto || !ehIntencao) return
     if (situacaoAtual !== 'homologada' && situacaoAtual !== 'excecao') return
-    listarTurmas(intencao?.ano_letivo ?? registro?.ano_letivo)
+    listarTurmas(intencao?.ano_letivo ?? registro?.ano_letivo, escopo)
       .then(setTurmas)
       .catch((err) => console.warn('Falha ao carregar turmas:', err))
-  }, [aberto, ehIntencao, situacaoAtual, intencao?.ano_letivo, registro?.ano_letivo])
+  }, [aberto, ehIntencao, situacaoAtual, intencao?.ano_letivo, registro?.ano_letivo, escopo])
 
   async function aplicarNovaSituacao() {
     setErro('')

@@ -10,6 +10,15 @@ const statusClasses = {
   purple: 'bg-purple-50 text-purple-700 ring-purple-200',
 }
 
+const iconClasses = {
+  slate: 'bg-slate-100 text-slate-700',
+  blue: 'bg-blue-50 text-blue-700',
+  green: 'bg-emerald-50 text-emerald-700',
+  yellow: 'bg-amber-50 text-amber-700',
+  red: 'bg-rose-50 text-rose-700',
+  purple: 'bg-purple-50 text-purple-700',
+}
+
 function Metric({ label, value }) {
   return (
     <div className="min-w-0">
@@ -22,11 +31,13 @@ function Metric({ label, value }) {
 function ModuleCard({ module }) {
   const Icon = module.icon ?? LayoutGrid
   const statusColor = module.statusColor ?? 'slate'
+  const iconColor = module.iconColor ?? statusColor
+  const interactive = !module.disabled && (module.href || module.onClick)
   const content = (
     <>
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
+          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${iconClasses[iconColor] ?? iconClasses.slate}`}>
             <Icon size={18} strokeWidth={2.4} />
           </div>
           <div className="min-w-0">
@@ -37,12 +48,12 @@ function ModuleCard({ module }) {
           </div>
         </div>
 
-        {(module.href || module.onClick) && (
+        {interactive && (
           <ArrowRight size={17} className="mt-1 shrink-0 text-slate-400 transition-transform duration-150 group-hover:translate-x-0.5 group-hover:text-slate-600" />
         )}
       </div>
 
-      {(module.status || module.badge || module.metrics?.length > 0) && (
+      {(module.status || module.badge || module.metrics?.length > 0 || module.note) && (
         <div className="mt-4 flex flex-wrap items-end justify-between gap-3">
           {module.metrics?.length > 0 && (
             <div className="grid min-w-0 flex-1 grid-cols-2 gap-3">
@@ -59,15 +70,19 @@ function ModuleCard({ module }) {
           )}
         </div>
       )}
+
+      {module.note && <p className="mt-3 text-xs leading-5 text-slate-500">{module.note}</p>}
     </>
   )
 
-  const className = `
-    group block h-full rounded-2xl border border-slate-200/70 bg-white p-4 text-left shadow-sm shadow-slate-200/40
-    transition-all duration-150 hover:border-slate-300 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500/30
-  `
+  const className = [
+    'group block h-full rounded-2xl border border-slate-200/70 bg-white p-4 text-left shadow-sm shadow-slate-200/40',
+    module.disabled
+      ? 'cursor-default opacity-80'
+      : 'transition-all duration-150 hover:border-slate-300 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500/30',
+  ].join(' ')
 
-  if (module.href) {
+  if (!module.disabled && module.href) {
     const ehInterno = typeof module.href === 'string' && module.href.startsWith('/')
     if (ehInterno) {
       return (
@@ -89,7 +104,7 @@ function ModuleCard({ module }) {
     )
   }
 
-  if (module.onClick) {
+  if (!module.disabled && module.onClick) {
     return (
       <button type="button" onClick={module.onClick} className={className} aria-label={module.ariaLabel ?? module.title}>
         {content}

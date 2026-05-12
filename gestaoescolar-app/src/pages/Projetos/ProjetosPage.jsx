@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { collection, query, orderBy, onSnapshot } from 'firebase/firestore'
 import { db } from '../../firebase/firebase'
 import { useAuth } from '../../context/AuthContext'
@@ -32,9 +32,10 @@ const STATUS_PEND = {
 const TIPOS_PENDENCIA = ['PDDE', 'Conselho PDE', 'Plano de Ação', 'Formação', 'Avaliação Institucional', 'Outro']
 
 export default function ProjetosPage() {
-  const { user, perfil } = useAuth()
+  const { user, perfil, escolaId, unidadeAtualId } = useAuth()
   const toast = useToast()
   const podeGerenciar = ['diretor', 'coordenador', 'admin'].includes(perfil?.perfil)
+  const escopo = useMemo(() => ({ escolaId, unidadeAtualId, perfil }), [escolaId, unidadeAtualId, perfil])
 
   const [projetos, setProjetos] = useState([])
   const [pendencias, setPendencias] = useState([])
@@ -92,7 +93,7 @@ export default function ProjetosPage() {
     if (!formProj.nome.trim()) { setErro('Nome obrigatório.'); return }
     setSalvando(true)
     try {
-      await criarProjeto(formProj, user.uid)
+      await criarProjeto(formProj, user.uid, escopo)
       setModalProj(false)
       setFormProj({ nome: '', descricao: '', categoria: '', status: 'planejado', data_inicio: '', data_fim: '', meta: '', indicador_sucesso: '' })
       setErro('')
@@ -107,7 +108,7 @@ export default function ProjetosPage() {
     if (!formPend.data_prazo) { setErro('Data prazo obrigatória.'); return }
     setSalvando(true)
     try {
-      await criarPendencia({ ...formPend, responsavel_id: user.uid }, user.uid)
+      await criarPendencia({ ...formPend, responsavel_id: user.uid }, user.uid, escopo)
       setModalPend(false)
       setFormPend({ titulo: '', descricao: '', tipo: 'PDDE', data_prazo: '', status: 'pendente', responsavel_id: '', alerta_dias_antes: 15 })
       setErro('')
